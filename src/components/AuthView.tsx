@@ -277,28 +277,6 @@ export const AuthView: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Super Admin Helper */}
-          <div className="mt-4 p-3 bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <div>
-                <p className="text-[11px] font-bold text-gray-800 dark:text-zinc-200">Super Admin Access</p>
-                <p className="text-[10px] text-gray-500 font-mono">patelmunaf90@gmail.com</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('patelmunaf90@gmail.com');
-                setPassword('munaf786');
-                setIsRegister(false);
-              }}
-              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-sm cursor-pointer active:scale-95"
-            >
-              Autofill
-            </button>
-          </div>
-
           <div className="mt-10 text-center">
             <p className="text-[10px] font-black text-gray-400 dark:text-zinc-600 uppercase tracking-widest">
               © GLOBAL SOFTWARE SOLUTIONS 2026
