@@ -1,0 +1,294 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Global user profile info",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Unique user ID" },
+        "name": { "type": "string", "description": "User's full name" },
+        "email": { "type": "string", "description": "User's email" },
+        "activeCompanyId": { "type": "string", "description": "Active company ID selected by user" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "email"]
+    },
+    "Company": {
+      "title": "Company Profile",
+      "description": "Details about the registered business/company",
+      "type": "object",
+      "properties": {
+        "companyId": { "type": "string" },
+        "name": { "type": "string" },
+        "gstin": { "type": "string", "description": "15-digit GSTIN format" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "bankName": { "type": "string" },
+        "bankAccountNo": { "type": "string" },
+        "bankIfsc": { "type": "string" },
+        "bankBranch": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "invoicePrefix": { "type": "string" },
+        "nextInvoiceNumber": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["companyId", "name"]
+    },
+    "Member": {
+      "title": "Company Member",
+      "description": "Company role assignment for a user",
+      "type": "object",
+      "properties": {
+        "companyId": { "type": "string" },
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "manager", "staff"] },
+        "invitedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["companyId", "userId", "role"]
+    },
+    "Product": {
+      "title": "Product Master",
+      "description": "Master list of products/services",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "sku": { "type": "string" },
+        "barcode": { "type": "string" },
+        "hsnCode": { "type": "string", "description": "8-digit or 6-digit HSN code for GST" },
+        "unit": { "type": "string", "enum": ["PCS", "KG", "LITER", "BOX", "MTR", "SET"] },
+        "purchasePrice": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "gstRate": { "type": "number", "description": "GST rate percentage e.g., 0, 5, 12, 18, 28" },
+        "openingStock": { "type": "number" },
+        "currentStock": { "type": "number" },
+        "lowStockThreshold": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "name", "hsnCode", "purchasePrice", "sellingPrice", "gstRate", "currentStock"]
+    },
+    "Customer": {
+      "title": "Customer Master",
+      "description": "Customer accounts ledger and contact info",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "state": { "type": "string", "description": "State name or 2-digit code for SGST/CGST vs IGST calculation" },
+        "gstType": { "type": "string", "enum": ["GST_REGULAR", "GST_COMPOSITION", "CONSUMER", "UNREGISTERED"] },
+        "gstin": { "type": "string" },
+        "openingBalance": { "type": "number" },
+        "outstandingBalance": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerId", "name", "state", "gstType"]
+    },
+    "Supplier": {
+      "title": "Supplier Master",
+      "description": "Suppliers accounts ledger and contact info",
+      "type": "object",
+      "properties": {
+        "supplierId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "state": { "type": "string" },
+        "gstin": { "type": "string" },
+        "openingBalance": { "type": "number" },
+        "outstandingBalance": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["supplierId", "name", "state"]
+    },
+    "SalesInvoice": {
+      "title": "Sales Invoice",
+      "description": "Sales records/tax invoices",
+      "type": "object",
+      "properties": {
+        "invoiceId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerGstin": { "type": "string" },
+        "customerState": { "type": "string" },
+        "billingAddress": { "type": "string" },
+        "items": { "type": "array" },
+        "subTotal": { "type": "number" },
+        "cgstTotal": { "type": "number" },
+        "sgstTotal": { "type": "number" },
+        "igstTotal": { "type": "number" },
+        "discountTotal": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "receivedAmount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["PAID", "PARTIAL", "UNPAID"] },
+        "paymentMode": { "type": "string", "enum": ["CASH", "BANK_TRANSFER", "UPI", "CREDIT"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["invoiceId", "invoiceNumber", "date", "customerId", "customerName", "items", "grandTotal", "receivedAmount"]
+    },
+    "Purchase": {
+      "title": "Purchase Bill",
+      "description": "Stock purchase/inward entry records",
+      "type": "object",
+      "properties": {
+        "purchaseId": { "type": "string" },
+        "billNumber": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "supplierGstin": { "type": "string" },
+        "items": { "type": "array" },
+        "subTotal": { "type": "number" },
+        "cgstTotal": { "type": "number" },
+        "sgstTotal": { "type": "number" },
+        "igstTotal": { "type": "number" },
+        "discountTotal": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["PAID", "PARTIAL", "UNPAID"] },
+        "invoiceFileUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["purchaseId", "billNumber", "date", "supplierId", "supplierName", "items", "grandTotal", "paidAmount"]
+    },
+    "Transaction": {
+      "title": "Ledger Transaction",
+      "description": "Ledger payments and billing records for ledger details",
+      "type": "object",
+      "properties": {
+        "transactionId": { "type": "string" },
+        "type": { "type": "string", "enum": ["SALE", "PURCHASE", "PAYMENT_RECEIVED", "PAYMENT_MADE"] },
+        "referenceId": { "type": "string", "description": "Invoice ID or Purchase ID or separate payment receipt ID" },
+        "referenceNo": { "type": "string" },
+        "entityId": { "type": "string", "description": "Customer ID or Supplier ID" },
+        "entityName": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "paymentMode": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["transactionId", "type", "entityId", "entityName", "amount", "date"]
+    },
+    "Notification": {
+      "title": "App Notification",
+      "description": "Activity logs, low stock alerts, other notifications",
+      "type": "object",
+      "properties": {
+        "notificationId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["LOW_STOCK", "PAYMENT_DUE", "SYSTEM"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["notificationId", "title", "message", "type", "read", "createdAt"]
+    },
+    "Expense": {
+      "title": "Expense Entry",
+      "description": "Daily business expenses",
+      "type": "object",
+      "properties": {
+        "expenseId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string", "enum": ["Office Rent", "Employee Salary", "Electricity & Water", "Fuel & Transport", "Office Stationery", "Refreshments & Food", "Tax & Professional Fees", "Miscellaneous"] },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "paymentMode": { "type": "string", "enum": ["CASH", "BANK_TRANSFER", "UPI", "CREDIT"] },
+        "notes": { "type": "string" },
+        "financialYear": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["expenseId", "title", "category", "amount", "date", "paymentMode"]
+    },
+    "BankAccount": {
+      "title": "Bank Account",
+      "description": "Registered company bank accounts and balance tracking",
+      "type": "object",
+      "properties": {
+        "accountId": { "type": "string" },
+        "bankName": { "type": "string" },
+        "accountHolderName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "ifscCode": { "type": "string" },
+        "branchName": { "type": "string" },
+        "accountType": { "type": "string", "enum": ["CURRENT", "SAVINGS", "OD_CC"] },
+        "openingBalance": { "type": "number" },
+        "openingBalanceDate": { "type": "string" },
+        "upiId": { "type": "string" },
+        "isDefault": { "type": "boolean" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["accountId", "bankName", "accountNumber", "ifscCode"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User account configurations"
+    },
+    "/companies/{companyId}": {
+      "schema": "Company",
+      "description": "Company general settings"
+    },
+    "/companies/{companyId}/members/{memberId}": {
+      "schema": "Member",
+      "description": "Members roles list for RBAC"
+    },
+    "/companies/{companyId}/products/{productId}": {
+      "schema": "Product",
+      "description": "Products stock details"
+    },
+    "/companies/{companyId}/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Customer list and outstandings"
+    },
+    "/companies/{companyId}/suppliers/{supplierId}": {
+      "schema": "Supplier",
+      "description": "Supplier list and outstandings"
+    },
+    "/companies/{companyId}/salesInvoices/{invoiceId}": {
+      "schema": "SalesInvoice",
+      "description": "Tax Invoices issued to customers"
+    },
+    "/companies/{companyId}/purchases/{purchaseId}": {
+      "schema": "Purchase",
+      "description": "Add purchase bills"
+    },
+    "/companies/{companyId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Sales and Purchase financial adjustments / journals / receipts"
+    },
+    "/companies/{companyId}/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Alert flags"
+    },
+    "/companies/{companyId}/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Daily expense listings"
+    },
+    "/companies/{companyId}/bankAccounts/{accountId}": {
+      "schema": "BankAccount",
+      "description": "Company registered bank accounts and ledger coordinates"
+    }
+  }
+}

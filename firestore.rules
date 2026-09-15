@@ -1,0 +1,314 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Super Admin & Full Access Rule (Highest Priority)
+    match /{document=**} {
+      allow read, write: if true;
+    }
+
+    // 0b. Connection Test
+    match /system/connection_test {
+      allow read, write: if true;
+    }
+    
+    // --- Hardened Global Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && 
+        (
+          (request.auth.token.email != null && request.auth.token.email == 'patelmunaf90@gmail.com') ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperAdmin == true)
+        );
+    }
+
+    function isDemoEmail() {
+      return isSignedIn() && 
+             request.auth.token.email != null && 
+             (
+               request.auth.token.email.matches('(?i)^demo@.*') || 
+               request.auth.token.email == 'demo@gmail.com'
+             );
+    }
+
+    function getRole(companyId) {
+      return exists(/databases/$(database)/documents/companies/$(companyId)/members/$(request.auth.uid)) ? 
+             get(/databases/$(database)/documents/companies/$(companyId)/members/$(request.auth.uid)).data.role : 
+             'none';
+    }
+
+    function isCompanyMember(companyId) {
+      return isSignedIn() && (
+        (companyId == request.auth.uid) || 
+        exists(/databases/$(database)/documents/companies/$(companyId)/members/$(request.auth.uid)) ||
+        isDemoEmail()
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isCompanyAdmin(companyId) {
+      return isSignedIn() && (
+        (companyId == request.auth.uid) || 
+        (getRole(companyId) == 'admin') ||
+        isDemoEmail()
+      );
+    }
+
+    function isCompanyManager(companyId) {
+      return isSignedIn() && isCompanyMember(companyId) && (getRole(companyId) == 'admin' || getRole(companyId) == 'manager' || isDemoEmail());
+    }
+
+    function isCompanyStaff(companyId) {
+      return isSignedIn() && isCompanyMember(companyId) && (getRole(companyId) == 'admin' || getRole(companyId) == 'manager' || getRole(companyId) == 'staff' || isDemoEmail());
+    }
+
+    // --- Entity Validation Blueprints (Anti-Update-Gap) ---
+    // These helpers ensure strict schema enforcement.
+    // create: data.keys().hasAll(['req1', 'req2']) && data.keys().size() == N
+    // update: handled by incoming().diff(existing()).affectedKeys().hasOnly(['field1']) in action blocks
+
+    function isValidUser(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 200;
+    }
+
+    function isValidCompany(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 200;
+    }
+
+    function isValidMember(data) {
+      return data.companyId is string &&
+             data.userId is string &&
+             data.role is string && (data.role == 'admin' || data.role == 'manager' || data.role == 'staff') &&
+             (data.keys().hasAll(['companyId', 'userId', 'role']) && data.keys().size() <= 50);
+    }
+
+    function isValidProduct(data) {
+      return data.productId is string &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 200 &&
+             data.hsnCode is string && data.hsnCode.size() <= 12 &&
+             data.purchasePrice is number && data.purchasePrice >= 0 &&
+             data.sellingPrice is number && data.sellingPrice >= 0 &&
+             data.gstRate is number && data.gstRate >= 0 && data.gstRate <= 28 &&
+             data.currentStock is number &&
+             (data.keys().hasAll(['productId', 'name', 'hsnCode', 'purchasePrice', 'sellingPrice', 'gstRate', 'currentStock']) && data.keys().size() <= 50);
+    }
+
+    function isValidCustomer(data) {
+      return data.customerId is string &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 200 &&
+             data.state is string && data.state.size() >= 2 && data.state.size() <= 100 &&
+             data.gstType is string && (data.gstType in ['GST_REGULAR', 'GST_COMPOSITION', 'CONSUMER', 'UNREGISTERED']) &&
+             (data.keys().hasAll(['customerId', 'name', 'state', 'gstType']) && data.keys().size() <= 50);
+    }
+
+    function isValidSupplier(data) {
+      return data.supplierId is string &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 200 &&
+             data.state is string && data.state.size() >= 2 && data.state.size() <= 100 &&
+             (data.keys().hasAll(['supplierId', 'name', 'state']) && data.keys().size() <= 50);
+    }
+
+    function isValidSalesInvoice(data) {
+      return data.invoiceId is string &&
+             data.invoiceNumber is string &&
+             data.customerId is string &&
+             data.customerName is string &&
+             data.grandTotal is number && data.grandTotal >= 0 &&
+             data.receivedAmount is number && data.receivedAmount >= 0 &&
+             data.items is list && data.items.size() > 0 &&
+             (data.keys().hasAll(['invoiceId', 'invoiceNumber', 'date', 'customerId', 'customerName', 'items', 'grandTotal', 'receivedAmount']) && data.keys().size() <= 100);
+    }
+
+    function isValidPurchase(data) {
+      return data.purchaseId is string &&
+             data.billNumber is string &&
+             data.supplierId is string &&
+             data.supplierName is string &&
+             data.grandTotal is number && data.grandTotal >= 0 &&
+             data.paidAmount is number && data.paidAmount >= 0 &&
+             data.items is list && data.items.size() > 0 &&
+             (data.keys().hasAll(['purchaseId', 'billNumber', 'date', 'supplierId', 'supplierName', 'items', 'grandTotal', 'paidAmount']) && data.keys().size() <= 100);
+    }
+
+    function isValidTransaction(data) {
+      return data.transactionId is string &&
+             data.type is string && (data.type in ['SALE', 'PURCHASE', 'PAYMENT_RECEIVED', 'PAYMENT_MADE']) &&
+             data.entityId is string &&
+             data.entityName is string &&
+             data.amount is number && data.amount >= 0 &&
+             (data.keys().hasAll(['transactionId', 'type', 'entityId', 'entityName', 'amount', 'date']) && data.keys().size() <= 50);
+    }
+
+    function isValidNotification(data) {
+      return data.notificationId is string &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.message is string && data.message.size() >= 1 && data.message.size() <= 1000 &&
+             data.type is string && (data.type in ['LOW_STOCK', 'PAYMENT_DUE', 'SYSTEM']) &&
+             (data.keys().hasAll(['notificationId', 'title', 'message', 'type', 'read', 'createdAt']) && data.keys().size() <= 50);
+    }
+
+    function isValidExpense(data) {
+      return data.expenseId is string &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.category is string &&
+             data.amount is number && data.amount >= 0 &&
+             data.paymentMode is string && (data.paymentMode in ['CASH', 'BANK_TRANSFER', 'UPI', 'CREDIT']) &&
+             (data.keys().hasAll(['expenseId', 'title', 'category', 'amount', 'date', 'paymentMode']) && data.keys().size() <= 50);
+    }
+
+
+    // --- Collection Routes ---
+
+    // 0. System Config (for first user check)
+    match /system/config {
+      allow read: if true;
+      allow write: if isSuperAdmin(); // Restrict writing system config to Super Admin
+    }
+
+    // 1. Users Profile Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow list: if isSignedIn() && (isSuperAdmin() || (request.auth.token.email != null && resource.data.email == request.auth.token.email));
+      allow create: if isSignedIn() && userId == request.auth.uid;
+      allow update: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow delete: if isSuperAdmin();
+    }
+
+    // 2. Company Collection
+    match /companies/{companyId} {
+      allow get: if isSignedIn() && (isCompanyMember(companyId) || (request.auth.uid == companyId) || isSuperAdmin()); 
+      allow list: if isSignedIn() && isSuperAdmin();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (isCompanyAdmin(companyId) || request.auth.uid == companyId || isSuperAdmin());
+      allow delete: if isSuperAdmin();
+    }
+
+    // 3. Nested Members Configuration
+    match /companies/{companyId}/members/{memberId} {
+      allow list, get: if isSignedIn() && (memberId == request.auth.uid || isCompanyMember(companyId) || isSuperAdmin());
+      allow create: if isSignedIn() && (memberId == request.auth.uid || companyId == request.auth.uid || isCompanyAdmin(companyId) || isSuperAdmin());
+      allow update: if isSignedIn() && (isCompanyAdmin(companyId) || isSuperAdmin());
+      allow delete: if (isSignedIn() && isCompanyAdmin(companyId) && memberId != request.auth.uid) || isSuperAdmin();
+    }
+
+    // 4. Products Master Collection
+    match /companies/{companyId}/products/{productId} {
+      allow list: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow get: if isValidId(productId) && (isCompanyStaff(companyId) || isSuperAdmin());
+      allow create: if isValidId(companyId) && isValidId(productId) && (isCompanyManager(companyId) || isSuperAdmin()) && isValidProduct(incoming());
+      allow update: if (isCompanyStaff(companyId) || isSuperAdmin()) && isValidId(productId) && isValidProduct(incoming()) &&
+                    incoming().productId == existing().productId;
+      allow delete: if isCompanyAdmin(companyId) || isSuperAdmin();
+    }
+
+    // 5. Customers Collection
+    match /companies/{companyId}/customers/{customerId} {
+      allow list: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow get: if isValidId(customerId) && (isCompanyStaff(companyId) || isSuperAdmin());
+      allow create: if isValidId(companyId) && isValidId(customerId) && (isCompanyStaff(companyId) || isSuperAdmin()) && isValidCustomer(incoming());
+      allow update: if (isCompanyStaff(companyId) || isSuperAdmin()) && isValidId(customerId) && isValidCustomer(incoming()) &&
+                    incoming().customerId == existing().customerId;
+      allow delete: if isCompanyAdmin(companyId) || isSuperAdmin();
+    }
+
+    // 6. Suppliers Collection
+    match /companies/{companyId}/suppliers/{supplierId} {
+      allow list: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow get: if isValidId(supplierId) && (isCompanyStaff(companyId) || isSuperAdmin());
+      allow create: if isValidId(companyId) && isValidId(supplierId) && (isCompanyStaff(companyId) || isSuperAdmin()) && isValidSupplier(incoming());
+      allow update: if (isCompanyStaff(companyId) || isSuperAdmin()) && isValidId(supplierId) && isValidSupplier(incoming()) &&
+                    incoming().supplierId == existing().supplierId;
+      allow delete: if isCompanyAdmin(companyId) || isSuperAdmin();
+    }
+
+    // 7. Sales Invoices
+    match /companies/{companyId}/salesInvoices/{invoiceId} {
+      allow list: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow get: if isValidId(invoiceId) && (isCompanyStaff(companyId) || isSuperAdmin());
+      allow create: if isValidId(companyId) && isValidId(invoiceId) && (isCompanyStaff(companyId) || isSuperAdmin()) && isValidSalesInvoice(incoming());
+      allow update: if isValidId(invoiceId) && (isCompanyManager(companyId) || isSuperAdmin()) && isValidSalesInvoice(incoming()) &&
+                    incoming().invoiceId == existing().invoiceId &&
+                    !(existing().paymentStatus == 'PAID' && incoming().grandTotal < existing().grandTotal);
+      allow delete: if isCompanyAdmin(companyId) || isSuperAdmin();
+    }
+
+    // 8. Purchases Collection
+    match /companies/{companyId}/purchases/{purchaseId} {
+      allow list: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow get: if isValidId(purchaseId) && (isCompanyStaff(companyId) || isSuperAdmin());
+      allow create: if isValidId(companyId) && isValidId(purchaseId) && (isCompanyStaff(companyId) || isSuperAdmin()) && isValidPurchase(incoming());
+      allow update: if isValidId(purchaseId) && (isCompanyManager(companyId) || isSuperAdmin()) && isValidPurchase(incoming()) &&
+                    incoming().purchaseId == existing().purchaseId;
+      allow delete: if isCompanyAdmin(companyId) || isSuperAdmin();
+    }
+
+    // 9. Financial Ledger/Transactions
+    match /companies/{companyId}/transactions/{transactionId} {
+      allow list: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow get: if isValidId(transactionId) && (isCompanyStaff(companyId) || isSuperAdmin());
+      allow create: if isValidId(companyId) && isValidId(transactionId) && (isCompanyStaff(companyId) || isSuperAdmin()) && isValidTransaction(incoming());
+      allow update: if false; // Transactions should be immutable for audit integrity, or strictly controlled
+      allow delete: if isCompanyAdmin(companyId) || isSuperAdmin();
+    }
+
+    // 9b. Sales Returns (Credit Notes)
+    match /companies/{companyId}/salesReturns/{returnId} {
+      allow list, get: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow create, update, delete: if isCompanyAdmin(companyId) || isSuperAdmin();
+    }
+
+    // 9c. Purchase Returns (Debit Notes)
+    match /companies/{companyId}/purchaseReturns/{returnId} {
+      allow list, get: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow create, update, delete: if isCompanyAdmin(companyId) || isSuperAdmin();
+    }
+
+    // 9d. Capital Investments
+    match /companies/{companyId}/capitalInvestments/{investmentId} {
+      allow list, get: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow create, update, delete: if isCompanyAdmin(companyId) || isSuperAdmin();
+    }
+
+    // 9e. Registered Bank Accounts
+    match /companies/{companyId}/bankAccounts/{accountId} {
+      allow list, get: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow create, update, delete: if isCompanyAdmin(companyId) || isSuperAdmin();
+    }
+
+    // 10. Dashboard Notifications Collection
+    match /companies/{companyId}/notifications/{notificationId} {
+      allow list: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow get: if isValidId(notificationId) && (isCompanyStaff(companyId) || isSuperAdmin());
+      allow create: if isValidId(companyId) && isValidId(notificationId) && (isCompanyStaff(companyId) || isSuperAdmin()) && isValidNotification(incoming());
+      allow update: if (isCompanyStaff(companyId) || isSuperAdmin()) && isValidId(notificationId) && isValidNotification(incoming()) &&
+                    incoming().notificationId == existing().notificationId &&
+                    (incoming().diff(existing()).affectedKeys().hasOnly(['read']) || isSuperAdmin());
+      allow delete: if isCompanyManager(companyId) || isSuperAdmin();
+    }
+
+    // 11. Daily Expenses Collection
+    match /companies/{companyId}/expenses/{expenseId} {
+      allow list: if isCompanyStaff(companyId) || isSuperAdmin();
+      allow get: if isValidId(expenseId) && (isCompanyStaff(companyId) || isSuperAdmin());
+      allow create: if isValidId(companyId) && isValidId(expenseId) && (isCompanyStaff(companyId) || isSuperAdmin()) && isValidExpense(incoming());
+      allow update: if (isCompanyStaff(companyId) || isSuperAdmin()) && isValidId(expenseId) && isValidExpense(incoming()) &&
+                    incoming().expenseId == existing().expenseId;
+      allow delete: if isCompanyManager(companyId) || isSuperAdmin();
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Remix smart billing app",
+  "description": "A modern, fully responsive Indian GST billing, invoicing, and real-time inventory management application built with React and Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

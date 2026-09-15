@@ -1,0 +1,168 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Overwrite blue to be the premium Sleek Indigo colors */
+  --color-blue-50: #f5f3ff;
+  --color-blue-100: #e0e7ff;
+  --color-blue-200: #c7d2fe;
+  --color-blue-300: #a5b4fc;
+  --color-blue-400: #818cf8;
+  --color-blue-500: #6366f1;
+  --color-blue-600: #4f46e5;
+  --color-blue-700: #4338ca;
+  --color-blue-800: #3730a3;
+  --color-blue-900: #312e81;
+  --color-blue-950: #1e1b4b;
+
+  /* Overwrite gray to be the high-contrast premium Slate theme */
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+  --color-gray-950: #020617;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-gray-50);
+}
+
+/* Remove up/down spin arrows from numeric amount/quantity inputs for direct clean typing */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.statement-print-header,
+.reports-print-header {
+  display: none !important;
+}
+
+@media print {
+  .statement-print-header,
+  .reports-print-header {
+    display: block !important;
+    visibility: visible !important;
+  }
+  .statement-print-header *,
+  .reports-print-header * {
+    visibility: visible !important;
+  }
+
+  /* Hide standard app shells entirely so they do NOT affect the document layout flow */
+  header,
+  aside,
+  #header-view-title,
+  #party-bills-modal-overlay,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Reset layout constraints on root elements to avoid clipping, scrolling, or offset transforms */
+  html, body {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    transform: none !important;
+    filter: none !important;
+    transition: none !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Hide everything else by default during browser rendering */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Explicitly make the root, main layout wrapper, and the views visible so parent containers of the overlays do not collapse or hide their contents */
+  #root, 
+  #root > div, 
+  #root > div > div, 
+  #root > div > div > div,
+  #invoice-print-modal-overlay,
+  #purchase-print-modal-overlay,
+  #statement-modal-overlay,
+  #receipt-print-modal-overlay {
+    visibility: visible !important;
+  }
+
+  /* Force print overlays and all their nested children to be visible */
+  #statement-modal-overlay *,
+  #invoice-print-modal-overlay *,
+  #purchase-print-modal-overlay *,
+  #receipt-print-modal-overlay * {
+    visibility: visible !important;
+  }
+
+  /* Set printable overlay modal sheets to fill the absolute page coordinates cleanly */
+  #statement-modal-overlay,
+  #invoice-print-modal-overlay,
+  #purchase-print-modal-overlay,
+  #receipt-print-modal-overlay {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100% !important;
+    background: white !important;
+    color: black !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    display: block !important;
+    z-index: 9999 !important;
+  }
+
+  /* Ensure dark mode class on HTML does not render dark backgrounds or pale text on printed paper */
+  .dark #statement-modal-overlay,
+  .dark #invoice-print-modal-overlay,
+  .dark #purchase-print-modal-overlay,
+  .dark #receipt-print-modal-overlay {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Hide interaction-only structural tools, buttons, datepickers, and close controls in physical print */
+  #btn-close-statement-modal, 
+  #btn-print-statement, 
+  #btn-download-statement-pdf,
+  #btn-statement-preset-all,
+  #btn-statement-preset-month,
+  #btn-statement-preset-30,
+  #btn-statement-preset-custom,
+  #stmt-start-date,
+  #stmt-end-date,
+  #btn-close-invoice-modal,
+  #btn-print-invoice,
+  #btn-download-invoice-pdf,
+  #btn-close-purchase-modal,
+  #btn-print-purchase,
+  #btn-download-purchase-pdf,
+  #btn-close-receipt-modal,
+  #btn-print-receipt,
+  #btn-download-receipt-pdf,
+  .billing-header-print {
+    display: none !important;
+  }
+}
