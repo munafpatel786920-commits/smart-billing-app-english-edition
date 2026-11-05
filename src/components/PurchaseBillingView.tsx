@@ -14,7 +14,16 @@ import {
   Save, 
   FileText,
   FileCheck,
-  ArrowRightLeft
+  ArrowRightLeft,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  CreditCard,
+  Search,
+  Filter,
+  DollarSign,
+  X,
+  Check
 } from 'lucide-react';
 import { PurchaseItem, PurchaseBill, Supplier } from '../types';
 
@@ -22,8 +31,11 @@ export const PurchaseBillingView: React.FC = () => {
   const { 
     activeCompany, 
     products, 
-    suppliers, 
+    suppliers,
+    purchases,
     savePurchaseEntry, 
+    updatePurchasePaymentStatus,
+    deletePurchaseEntry,
     savePurchaseReturn,
     saveSupplier,
     formatCurrency,
@@ -36,12 +48,22 @@ export const PurchaseBillingView: React.FC = () => {
   const [refBillNo, setRefBillNo] = useState('');
   const [returnReason, setReturnReason] = useState('Damaged Goods');
 
-  // Selected State
+  // Selected State for Purchase Entry
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [items, setItems] = useState<Omit<PurchaseItem, 'total'>[]>([]);
   const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [paymentMode, setPaymentMode] = useState<'CASH' | 'BANK_TRANSFER' | 'UPI' | 'CREDIT'>('CASH');
   const [billNumber, setBillNumber] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Search & Filter for Recent Purchase Bills List
+  const [purchaseSearch, setPurchaseSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'PARTIAL' | 'UNPAID'>('ALL');
+
+  // Payment record modal for existing purchase bill
+  const [payModalPurchase, setPayModalPurchase] = useState<PurchaseBill | null>(null);
+  const [payInputAmount, setPayInputAmount] = useState<string>('');
+  const [payInputMode, setPayInputMode] = useState<'CASH' | 'BANK_TRANSFER' | 'UPI' | 'CREDIT'>('CASH');
 
   // Inline forms
   const [showAddSupplier, setShowAddSupplier] = useState(false);
@@ -310,11 +332,12 @@ export const PurchaseBillingView: React.FC = () => {
         discountTotal: totals.discountTotal,
         grandTotal: totals.grandTotal,
         paidAmount: paidAmount,
-        paymentStatus: (paidAmount >= totals.grandTotal) 
+        paymentStatus: (paidAmount >= totals.grandTotal && totals.grandTotal > 0) 
           ? 'PAID' 
           : (paidAmount > 0) 
             ? 'PARTIAL' 
-            : 'UNPAID'
+            : 'UNPAID',
+        paymentMode: paymentMode
       });
 
       alert('Purchase recorded. Inventory updated successfully!');
@@ -322,10 +345,41 @@ export const PurchaseBillingView: React.FC = () => {
       setSelectedSupplierId('');
       setPaidAmount(0);
       setBillNumber('');
+      setPaymentMode('CASH');
     } catch (err) {
       alert('Failed to save purchase. Check role-based security settings.');
     }
   };
+
+  const handleRecordPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payModalPurchase) return;
+
+    const amt = parseFloat(payInputAmount);
+    if (isNaN(amt) || amt <= 0) {
+      alert('Please enter a valid payment amount.');
+      return;
+    }
+
+    try {
+      await updatePurchasePaymentStatus(payModalPurchase.purchaseId, amt, payInputMode);
+      alert(`Payment of ${formatCurrency(amt)} recorded successfully for Bill ${payModalPurchase.billNumber}!`);
+      setPayModalPurchase(null);
+      setPayInputAmount('');
+    } catch (err) {
+      alert('Failed to record payment. Please try again.');
+    }
+  };
+
+  const filteredPurchaseList = useMemo(() => {
+    if (!purchases || !Array.isArray(purchases)) return [];
+    return purchases.filter(p => {
+      const q = purchaseSearch.toLowerCase().trim();
+      const matchesSearch = !q || p.billNumber?.toLowerCase().includes(q) || p.supplierName?.toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'ALL' || (p.paymentStatus || 'UNPAID') === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [purchases, purchaseSearch, statusFilter]);
 
   return (
     <div className="space-y-6">
@@ -631,16 +685,115 @@ export const PurchaseBillingView: React.FC = () => {
             </div>
 
             {!isReturnMode && (
-              <div className="border-t border-gray-100 dark:border-zinc-800 pt-3 text-xs">
-                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Paid Amount to Vendor ({countryConfig.currencySymbol})</label>
-                <input
-                  id="inp-purchase-paid"
-                  type="number"
-                  value={paidAmount}
-                  onChange={(e: any) => setPaidAmount(Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-full p-2 border border-gray-250 dark:border-zinc-800 dark:bg-zinc-900 rounded font-bold"
-                  placeholder={`${countryConfig.currencySymbol} Amount Paid`}
-                />
+              <div className="border-t border-gray-100 dark:border-zinc-800 pt-3 text-xs space-y-3">
+                {/* Dynamic Payment Status Badge & Controls */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Payment Status</label>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide flex items-center gap-1 ${
+                      paidAmount >= totals.grandTotal && totals.grandTotal > 0
+                        ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                        : paidAmount > 0
+                        ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                        : 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                    }`}>
+                      {paidAmount >= totals.grandTotal && totals.grandTotal > 0 ? (
+                        <><span>✓</span><span>PAID IN FULL</span></>
+                      ) : paidAmount > 0 ? (
+                        <><span>⏳</span><span>PARTIAL ({formatCurrency(paidAmount)})</span></>
+                      ) : (
+                        <><span>✕</span><span>UNPAID / CREDIT</span></>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Preset Quick Status Buttons */}
+                  <div className="grid grid-cols-3 gap-1.5 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaidAmount(totals.grandTotal);
+                        if (paymentMode === 'CREDIT') setPaymentMode('CASH');
+                      }}
+                      className={`py-1.5 px-2 rounded-lg text-[10px] font-extrabold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
+                        paidAmount >= totals.grandTotal && totals.grandTotal > 0
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                          : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50 hover:bg-emerald-100'
+                      }`}
+                    >
+                      <span>✓ Full Paid</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (paidAmount === 0 || paidAmount >= totals.grandTotal) {
+                          setPaidAmount(parseFloat((totals.grandTotal / 2).toFixed(2)));
+                        }
+                      }}
+                      className={`py-1.5 px-2 rounded-lg text-[10px] font-extrabold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
+                        paidAmount > 0 && paidAmount < totals.grandTotal
+                          ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
+                          : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 hover:bg-amber-100'
+                      }`}
+                    >
+                      <span>⏳ Partial</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaidAmount(0);
+                        setPaymentMode('CREDIT');
+                      }}
+                      className={`py-1.5 px-2 rounded-lg text-[10px] font-extrabold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
+                        paidAmount === 0
+                          ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                          : 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800/50 hover:bg-rose-100'
+                      }`}
+                    >
+                      <span>✕ Unpaid</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Paid Amount Field */}
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                    Paid Amount to Vendor ({countryConfig.currencySymbol})
+                  </label>
+                  <input
+                    id="inp-purchase-paid"
+                    type="number"
+                    min="0"
+                    max={totals.grandTotal}
+                    value={paidAmount}
+                    onChange={(e: any) => setPaidAmount(Math.max(0, parseFloat(e.target.value) || 0))}
+                    className="w-full p-2 border border-gray-250 dark:border-zinc-800 dark:bg-zinc-900 rounded font-bold text-xs"
+                    placeholder={`${countryConfig.currencySymbol} Amount Paid`}
+                  />
+                  {paidAmount < totals.grandTotal && (
+                    <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1">
+                      Remaining Balance Due: {formatCurrency(Math.max(0, totals.grandTotal - paidAmount))}
+                    </p>
+                  )}
+                </div>
+
+                {/* Payment Mode Selector */}
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                    Payment Mode
+                  </label>
+                  <select
+                    id="sel-purchase-payment-mode"
+                    value={paymentMode}
+                    onChange={(e: any) => setPaymentMode(e.target.value)}
+                    className="w-full p-2 border border-gray-250 dark:border-zinc-800 dark:bg-zinc-900 rounded text-xs font-bold"
+                  >
+                    <option value="CASH">💵 Cash</option>
+                    <option value="BANK_TRANSFER">🏦 Bank Transfer / NEFT</option>
+                    <option value="UPI">📱 BHIM UPI</option>
+                    <option value="CREDIT">🤝 Accounts Credit</option>
+                  </select>
+                </div>
               </div>
             )}
           </div>
@@ -794,6 +947,249 @@ export const PurchaseBillingView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* RECENT PURCHASES & PAYMENT STATUS MANAGEMENT SECTION */}
+      <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-150 dark:border-zinc-800">
+          <div>
+            <h4 id="recent-purchases-title" className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+              <span>Recent Purchase Bills & Payment Status</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300">
+                {filteredPurchaseList.length} Records
+              </span>
+            </h4>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Track paid, partial, and unpaid purchase bills, and record vendor payments in real-time.
+            </p>
+          </div>
+
+          {/* Search & Status Filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-gray-400" />
+              <input
+                type="text"
+                value={purchaseSearch}
+                onChange={(e) => setPurchaseSearch(e.target.value)}
+                placeholder="Search Bill No or Supplier..."
+                className="pl-8 pr-3 py-1.5 text-xs bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl w-48 focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <select
+              value={statusFilter}
+              onChange={(e: any) => setStatusFilter(e.target.value)}
+              className="text-xs p-1.5 px-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl font-bold text-gray-700 dark:text-zinc-300"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="PAID">✓ Paid Bills</option>
+              <option value="PARTIAL">⏳ Partial Paid</option>
+              <option value="UNPAID">✕ Unpaid Bills</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Purchase Bills Table */}
+        {filteredPurchaseList.length === 0 ? (
+          <div className="text-center py-10 text-gray-400 text-xs italic">
+            No purchase records found matching your filters.
+          </div>
+        ) : (
+          <div className="overflow-x-auto text-xs">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-100/70 dark:bg-zinc-800/40 text-[9px] font-extrabold uppercase text-gray-500 tracking-wider border-b border-gray-200 dark:border-zinc-800">
+                  <th className="py-2.5 px-3">Date</th>
+                  <th className="py-2.5 px-3">Bill No.</th>
+                  <th className="py-2.5 px-3">Supplier Name</th>
+                  <th className="py-2.5 px-3 text-right">Grand Total</th>
+                  <th className="py-2.5 px-3 text-right">Paid Amount</th>
+                  <th className="py-2.5 px-3 text-right">Balance Due</th>
+                  <th className="py-2.5 px-3 text-center">Payment Status</th>
+                  <th className="py-2.5 px-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-150 dark:divide-zinc-800/50">
+                {filteredPurchaseList.map((pur) => {
+                  const currentPaid = pur.paidAmount || 0;
+                  const balanceDue = Math.max(0, pur.grandTotal - currentPaid);
+                  const status = pur.paymentStatus || (currentPaid >= pur.grandTotal ? 'PAID' : currentPaid > 0 ? 'PARTIAL' : 'UNPAID');
+
+                  return (
+                    <tr key={pur.purchaseId} className="hover:bg-gray-50/50 dark:hover:bg-zinc-850/20 transition-colors">
+                      <td className="py-3 px-3 font-mono text-gray-600 dark:text-zinc-400">
+                        {new Date(pur.date).toLocaleDateString('en-IN')}
+                      </td>
+                      <td className="py-3 px-3 font-bold font-mono text-gray-900 dark:text-white uppercase">
+                        {pur.billNumber}
+                      </td>
+                      <td className="py-3 px-3 font-medium text-gray-800 dark:text-zinc-200">
+                        {pur.supplierName}
+                      </td>
+                      <td className="py-3 px-3 text-right font-black text-gray-900 dark:text-white">
+                        {formatCurrency(pur.grandTotal)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(currentPaid)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-bold text-rose-600 dark:text-rose-400">
+                        {formatCurrency(balanceDue)}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          status === 'PAID'
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                            : status === 'PARTIAL'
+                            ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                            : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                        }`}>
+                          {status === 'PAID' ? '✓ PAID' : status === 'PARTIAL' ? '⏳ PARTIAL' : '✕ UNPAID'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {status !== 'PAID' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPayModalPurchase(pur);
+                                setPayInputAmount(balanceDue.toFixed(2));
+                                setPayInputMode('CASH');
+                              }}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] rounded-lg shadow-xs flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <DollarSign className="w-3 h-3" />
+                              <span>Record Payment</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete purchase bill ${pur.billNumber}?`)) {
+                                deletePurchaseEntry(pur.purchaseId);
+                              }
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-500 rounded-md hover:bg-red-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                            title="Delete Purchase Bill"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* RECORD PAYMENT MODAL FOR PURCHASE BILL */}
+      {payModalPurchase && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
+            <div className="p-5 border-b border-gray-150 dark:border-zinc-800 flex justify-between items-center bg-gray-50/50 dark:bg-zinc-850/50">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-emerald-600" />
+                  <span>Record Supplier Payment</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Bill No: <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{payModalPurchase.billNumber}</span> ({payModalPurchase.supplierName})
+                </p>
+              </div>
+              <button
+                onClick={() => setPayModalPurchase(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRecordPaymentSubmit} className="p-5 space-y-4">
+              {/* Summary Stats */}
+              <div className="p-3 bg-gray-50 dark:bg-zinc-800/60 rounded-xl border border-gray-200 dark:border-zinc-700/60 grid grid-cols-3 gap-2 text-center text-xs">
+                <div>
+                  <span className="text-[10px] uppercase text-gray-400 font-bold block">Grand Total</span>
+                  <span className="font-black text-gray-900 dark:text-white mt-0.5 block">{formatCurrency(payModalPurchase.grandTotal)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase text-gray-400 font-bold block">Already Paid</span>
+                  <span className="font-black text-emerald-600 dark:text-emerald-400 mt-0.5 block">{formatCurrency(payModalPurchase.paidAmount || 0)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase text-gray-400 font-bold block">Balance Due</span>
+                  <span className="font-black text-rose-600 dark:text-rose-400 mt-0.5 block">
+                    {formatCurrency(Math.max(0, payModalPurchase.grandTotal - (payModalPurchase.paidAmount || 0)))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment Amount */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-zinc-300 mb-1">
+                  Payment Amount ({countryConfig.currencySymbol}) *
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  min="0.01"
+                  max={payModalPurchase.grandTotal - (payModalPurchase.paidAmount || 0)}
+                  required
+                  value={payInputAmount}
+                  onChange={(e) => setPayInputAmount(e.target.value)}
+                  className="w-full p-2.5 text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl font-bold text-gray-900 dark:text-white"
+                />
+                <div className="flex gap-2 mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPayInputAmount((payModalPurchase.grandTotal - (payModalPurchase.paidAmount || 0)).toFixed(2))}
+                    className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded border border-emerald-300 cursor-pointer"
+                  >
+                    Pay Full Balance ({formatCurrency(payModalPurchase.grandTotal - (payModalPurchase.paidAmount || 0))})
+                  </button>
+                </div>
+              </div>
+
+              {/* Payment Mode */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-zinc-300 mb-1">
+                  Payment Mode *
+                </label>
+                <select
+                  value={payInputMode}
+                  onChange={(e: any) => setPayInputMode(e.target.value)}
+                  className="w-full p-2.5 text-xs bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl font-bold text-gray-900 dark:text-white"
+                >
+                  <option value="CASH">💵 Cash</option>
+                  <option value="BANK_TRANSFER">🏦 Bank Transfer / NEFT / RTGS</option>
+                  <option value="UPI">📱 BHIM UPI</option>
+                  <option value="CREDIT">🤝 Accounts Credit</option>
+                </select>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-150 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setPayModalPurchase(null)}
+                  className="px-4 py-2 text-xs font-bold text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Confirm & Save Payment</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -130,6 +130,7 @@ interface AppContextType {
   
   // Purchase Operations
   savePurchaseEntry: (purchase: Omit<PurchaseBill, 'purchaseId'>) => Promise<void>;
+  updatePurchasePaymentStatus: (purchaseId: string, additionalPaidAmount: number, paymentMode?: 'CASH' | 'BANK_TRANSFER' | 'UPI' | 'CREDIT') => Promise<void>;
   deletePurchaseEntry: (purchaseId: string) => Promise<void>;
   
   // Ledger payment transactions
@@ -2243,6 +2244,96 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Update existing purchase bill payment status & record payment
+  const updatePurchasePaymentStatus = async (
+    purchaseId: string, 
+    additionalPaidAmount: number, 
+    paymentMode: 'CASH' | 'BANK_TRANSFER' | 'UPI' | 'CREDIT' = 'CASH'
+  ) => {
+    if (!activeCompany) return;
+    const compId = activeCompany.companyId;
+    const targetPurchase = allPurchases.find(p => p.purchaseId === purchaseId);
+    if (!targetPurchase) return;
+
+    const currentPaid = targetPurchase.paidAmount || 0;
+    const remainingDue = Math.max(0, targetPurchase.grandTotal - currentPaid);
+    const payAmt = Math.min(remainingDue, Math.max(0, additionalPaidAmount));
+    if (payAmt <= 0) return;
+
+    const newPaidTotal = parseFloat((currentPaid + payAmt).toFixed(2));
+    const newStatus: 'PAID' | 'PARTIAL' | 'UNPAID' = newPaidTotal >= targetPurchase.grandTotal ? 'PAID' : 'PARTIAL';
+    const now = new Date().toISOString();
+
+    // Update purchases list
+    const updatedPurchases = allPurchases.map(p => {
+      if (p.purchaseId === purchaseId) {
+        return {
+          ...p,
+          paidAmount: newPaidTotal,
+          paymentStatus: newStatus,
+          paymentMode,
+          updatedAt: now
+        };
+      }
+      return p;
+    });
+    setAllPurchases(updatedPurchases);
+    localStorage.setItem('demo_purchases', JSON.stringify(updatedPurchases));
+    localStorage.setItem(`gst_cache_${compId}_purchases`, JSON.stringify(updatedPurchases));
+
+    // Reduce supplier balance
+    const updatedSuppliers = suppliers.map(s => {
+      if (s.supplierId === targetPurchase.supplierId) {
+        return {
+          ...s,
+          outstandingBalance: Math.max(0, (s.outstandingBalance || 0) - payAmt),
+          updatedAt: now
+        };
+      }
+      return s;
+    });
+    setSuppliers(updatedSuppliers);
+    localStorage.setItem('demo_suppliers', JSON.stringify(updatedSuppliers));
+    localStorage.setItem(`gst_cache_${compId}_suppliers`, JSON.stringify(updatedSuppliers));
+
+    // Append payment transaction log
+    const txId = 'tx_' + Math.random().toString(36).substr(2, 9);
+    const newTx: LedgerTransaction = {
+      transactionId: txId,
+      type: 'PAYMENT_MADE',
+      referenceId: purchaseId,
+      referenceNo: targetPurchase.billNumber,
+      entityId: targetPurchase.supplierId,
+      entityName: targetPurchase.supplierName,
+      amount: payAmt,
+      date: now,
+      paymentMode,
+      description: `Payment made toward Purchase Bill ${targetPurchase.billNumber} (${newStatus})`,
+      financialYear: activeCompany?.financialYear || '2026-2027',
+      createdAt: now
+    };
+    const updatedTxs = [newTx, ...allTransactions];
+    setAllTransactions(updatedTxs);
+    localStorage.setItem('demo_transactions', JSON.stringify(updatedTxs));
+    localStorage.setItem(`gst_cache_${compId}_transactions`, JSON.stringify(updatedTxs));
+
+    if (isDemoMode) return;
+
+    try {
+      const purRef = doc(db, 'companies', compId, 'purchases', purchaseId);
+      await setDoc(purRef, { paidAmount: newPaidTotal, paymentStatus: newStatus, paymentMode, updatedAt: now }, { merge: true });
+
+      const suppRef = doc(db, 'companies', compId, 'suppliers', targetPurchase.supplierId);
+      const suppObj = suppliers.find(s => s.supplierId === targetPurchase.supplierId);
+      const nextBal = Math.max(0, (suppObj?.outstandingBalance || 0) - payAmt);
+      await setDoc(suppRef, { outstandingBalance: nextBal, updatedAt: now }, { merge: true });
+
+      await setDoc(doc(db, 'companies', compId, 'transactions', txId), newTx, { merge: true });
+    } catch (err) {
+      console.warn('Firestore updatePurchasePaymentStatus notice:', err);
+    }
+  };
+
   // Additional payment entries recorder
   const recordLedgerPayment = async (txData: Omit<LedgerTransaction, 'transactionId' | 'createdAt'>) => {
     if (!activeCompany) return;
@@ -3483,6 +3574,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       savePurchaseReturn,
       deletePurchaseReturn,
       savePurchaseEntry,
+      updatePurchasePaymentStatus,
       deletePurchaseEntry,
       recordLedgerPayment,
       
