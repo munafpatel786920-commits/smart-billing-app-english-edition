@@ -34,10 +34,14 @@ export interface Company {
   logoUrl?: string;
   invoicePrefix?: string;
   nextInvoiceNumber?: number;
-  country?: 'IN' | 'US' | 'UK' | 'CA';
+  country?: 'IN' | 'US' | 'UK' | 'CA' | 'AE' | 'SA' | 'AU' | 'SG' | 'DE';
+  state?: string;
   financialYear?: string;
   financialYears?: string[];
   upiId?: string;
+  enableManualTaxRates?: boolean;
+  customCountryTaxRates?: Partial<Record<string, number[]>>;
+  customDefaultTaxRates?: Partial<Record<string, number>>;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -76,6 +80,8 @@ export interface InvoiceItem {
   unit: string;
   price: number;
   discount: number; // total discount on this item in Rupees
+  discountPercent?: number;
+  discountType?: 'FLAT' | 'PERCENT';
   gstRate: number;
   cgst: number;
   sgst: number;
@@ -93,11 +99,13 @@ export interface SalesInvoice {
   customerState: string;
   billingAddress?: string;
   items: InvoiceItem[];
+  grossTotal?: number;
   subTotal: number;
   cgstTotal: number;
   sgstTotal: number;
   igstTotal: number;
   discountTotal: number;
+  additionalDiscount?: number;
   grandTotal: number;
   receivedAmount: number;
   paymentStatus: 'PAID' | 'PARTIAL' | 'UNPAID';
@@ -118,6 +126,8 @@ export interface PurchaseItem {
   unit: string;
   price: number;
   discount: number;
+  discountPercent?: number;
+  discountType?: 'FLAT' | 'PERCENT';
   gstRate: number;
   cgst: number;
   sgst: number;

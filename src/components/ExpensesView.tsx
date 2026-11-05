@@ -44,7 +44,8 @@ export function ExpensesView() {
     saveExpense, 
     deleteExpense, 
     activeCompany, 
-    formatCurrency 
+    formatCurrency,
+    countryConfig
   } = useApp();
 
   // Search, Filter, Sort and Selection States
@@ -365,7 +366,7 @@ export function ExpensesView() {
     doc.text('TOTAL PAID AMOUNT', 140, y + 15);
     
     doc.setFontSize(18);
-    doc.text(`Rs. ${exp.amount}`, 140, y + 26);
+    doc.text(`${countryConfig.currencySymbol} ${exp.amount}`, 140, y + 26);
     
     doc.setFontSize(8);
     doc.setTextColor(203, 213, 225);
@@ -456,7 +457,7 @@ export function ExpensesView() {
     doc.text('Expense Title', lMargin + 25, y + 5);
     doc.text('Category', lMargin + 85, y + 5);
     doc.text('Mode', lMargin + 135, y + 5);
-    doc.text('Amount (Rs)', 190, y + 5, { align: 'right' });
+    doc.text(`Amount (${countryConfig.currencySymbol})`, 190, y + 5, { align: 'right' });
 
     doc.line(lMargin, y + 8, 195, y + 8);
     y += 8;
@@ -477,7 +478,7 @@ export function ExpensesView() {
         doc.text('Expense Title', lMargin + 25, y + 5);
         doc.text('Category', lMargin + 85, y + 5);
         doc.text('Mode', lMargin + 135, y + 5);
-        doc.text('Amount (Rs)', 190, y + 5, { align: 'right' });
+        doc.text(`Amount (${countryConfig.currencySymbol})`, 190, y + 5, { align: 'right' });
         doc.line(lMargin, y + 8, 195, y + 8);
         y += 8;
         doc.setFont('helvetica', 'normal');
@@ -492,7 +493,7 @@ export function ExpensesView() {
       doc.text(localizedTitle, lMargin + 25, y + 5);
       doc.text(localizedCategory, lMargin + 85, y + 5);
       doc.text(exp.paymentMode, lMargin + 135, y + 5);
-      doc.text(`Rs. ${exp.amount}`, 190, y + 5, { align: 'right' });
+      doc.text(`${countryConfig.currencySymbol} ${exp.amount}`, 190, y + 5, { align: 'right' });
 
       expenseSumTotal += exp.amount;
       
@@ -510,7 +511,7 @@ export function ExpensesView() {
     doc.setFont('helvetica', 'bold');
     doc.text('Total Filtered Expenses Sum:', lMargin + 6, y + 8);
     doc.setFontSize(11);
-    doc.text(`Rs. ${expenseSumTotal}`, 190, y + 8, { align: 'right' });
+    doc.text(`${countryConfig.currencySymbol} ${expenseSumTotal}`, 190, y + 8, { align: 'right' });
 
     doc.save('Company_Filtered_Expenses.pdf');
   };
@@ -964,7 +965,7 @@ export function ExpensesView() {
                 {/* Amount field */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-black tracking-wider uppercase text-zinc-500 dark:text-zinc-400 flex justify-between">
-                    <span>Amount (Rs.) *</span>
+                    <span>Amount ({countryConfig.currencySymbol}) *</span>
                   </label>
                   <input
                     type="number"

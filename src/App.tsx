@@ -37,6 +37,7 @@ import {
   Wallet
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { COUNTRIES, CountryCode, getCountryConfig } from './utils/countryConfig';
 
 type ViewType = 'DASHBOARD' | 'SALES_BILLING' | 'PURCHASE_BILLING' | 'INVENTORY' | 'PARTIES' | 'REPORTS' | 'SETTINGS' | 'EXPENSES' | 'SUPER_ADMIN';
 
@@ -52,6 +53,7 @@ export default function App() {
     toggleTheme,
     updateUserProfile,
     updateCompanyProfile,
+    countryConfig,
     isDemoMode,
     t 
   } = useApp();
@@ -163,7 +165,7 @@ export default function App() {
               <span className="truncate">{activeCompany?.name || 'Bharat GST Bil'}</span>
             </h1>
             <span className="text-[10px] text-gray-400 font-mono tracking-wider truncate block">
-              GSTIN: {activeCompany?.gstin || 'Not Provided'}
+              {countryConfig.taxLabel}: {activeCompany?.gstin || 'Not Provided'}
             </span>
           </div>
         </div>
@@ -234,10 +236,35 @@ export default function App() {
             <h2 id="header-view-title" className="text-md sm:text-lg font-black tracking-tight text-gray-900 dark:text-white">
               {navItems.find(item => item.id === currentView)?.label}
             </h2>
-            <span className="hidden md:inline-flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase rounded-lg border border-emerald-200/30">
+            <span className="hidden xl:inline-flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase rounded-lg border border-emerald-200/30">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Licensed Billing Engine Active
+              Licensed Billing Engine
             </span>
+
+            {/* Quick Country & Tax Switcher */}
+            <div className="flex items-center gap-1.5 bg-gray-100/90 dark:bg-zinc-800/90 border border-gray-250 dark:border-zinc-700 rounded-xl px-2.5 py-1 shadow-xs">
+              <span className="text-sm select-none">{countryConfig.flag}</span>
+              <select
+                id="header-country-switcher"
+                value={activeCompany?.country || 'IN'}
+                onChange={(e) => {
+                  const newCode = e.target.value as CountryCode;
+                  const cfg = getCountryConfig(newCode);
+                  updateCompanyProfile({
+                    country: newCode,
+                    state: cfg.statesOrProvinces[0] || ''
+                  });
+                }}
+                className="bg-transparent text-xs font-black text-gray-800 dark:text-zinc-200 focus:outline-none cursor-pointer"
+                title="Change Country & Active Tax System"
+              >
+                {Object.values(COUNTRIES).map((c) => (
+                  <option key={c.code} value={c.code} className="dark:bg-zinc-900 text-gray-900 dark:text-white font-bold">
+                    {c.flag} {c.name} ({c.taxName} • {c.defaultTaxRate}%)
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

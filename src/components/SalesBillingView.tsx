@@ -86,38 +86,73 @@ export const SalesBillingView: React.FC = () => {
 
   // Calculations for items list and aggregates
   const totals = useMemo(() => {
+    let grossTotal = 0;
+    let discountTotal = 0;
     let subTotal = 0;
     let cgstTotal = 0;
     let sgstTotal = 0;
     let igstTotal = 0;
-    let discountTotal = 0;
 
     const computedItems: InvoiceItem[] = items.map(item => {
+      const lineGross = parseFloat((item.price * item.qty).toFixed(2));
+      grossTotal += lineGross;
+
+      // Calculate clean discount in currency
+      let itemDisc = 0;
+      if (item.discountType === 'PERCENT') {
+        const pct = Math.min(100, Math.max(0, item.discountPercent || 0));
+        itemDisc = parseFloat(((lineGross * pct) / 100).toFixed(2));
+      } else {
+        itemDisc = parseFloat(Math.min(lineGross, Math.max(0, item.discount || 0)).toFixed(2));
+      }
+      discountTotal += itemDisc;
+
       // Net Taxable Base = (Qty * Price) - Discount
-      const lineSub = (item.price * item.qty) - item.discount;
-      const cleanLineSub = Math.max(0, lineSub);
+      const cleanLineSub = parseFloat(Math.max(0, lineGross - itemDisc).toFixed(2));
       subTotal += cleanLineSub;
-      discountTotal += item.discount;
 
       let cgst = 0;
       let sgst = 0;
       let igst = 0;
 
-      if (isInterstate) {
-        igst = parseFloat(((cleanLineSub * item.gstRate) / 100).toFixed(2));
-        igstTotal += igst;
+      if (countryConfig.taxSystem === 'dual_gst') {
+        if (isInterstate) {
+          igst = parseFloat(((cleanLineSub * item.gstRate) / 100).toFixed(2));
+          igstTotal += igst;
+        } else {
+          const halfRate = item.gstRate / 2;
+          cgst = parseFloat(((cleanLineSub * halfRate) / 100).toFixed(2));
+          sgst = parseFloat(((cleanLineSub * halfRate) / 100).toFixed(2));
+          cgstTotal += cgst;
+          sgstTotal += sgst;
+        }
+      } else if (countryConfig.taxSystem === 'canadian_gst_pst') {
+        if (item.gstRate === 13 || item.gstRate === 15) {
+          igst = parseFloat(((cleanLineSub * item.gstRate) / 100).toFixed(2));
+          igstTotal += igst;
+        } else {
+          cgst = parseFloat(((cleanLineSub * 5) / 100).toFixed(2));
+          const pstRate = Math.max(0, item.gstRate - 5);
+          sgst = parseFloat(((cleanLineSub * pstRate) / 100).toFixed(2));
+          cgstTotal += cgst;
+          sgstTotal += sgst;
+        }
       } else {
-        const halfRate = item.gstRate / 2;
-        cgst = parseFloat(((cleanLineSub * halfRate) / 100).toFixed(2));
-        sgst = parseFloat(((cleanLineSub * halfRate) / 100).toFixed(2));
-        cgstTotal += cgst;
-        sgstTotal += sgst;
+        // Single VAT or Sales Tax:
+        const taxVal = parseFloat(((cleanLineSub * item.gstRate) / 100).toFixed(2));
+        igst = taxVal;
+        igstTotal += taxVal;
       }
 
       const total = parseFloat((cleanLineSub + cgst + sgst + igst).toFixed(2));
 
       return {
         ...item,
+        discount: itemDisc,
+        discountPercent: item.discountType === 'PERCENT'
+          ? (item.discountPercent || 0)
+          : (lineGross > 0 ? parseFloat(((itemDisc / lineGross) * 100).toFixed(2)) : 0),
+        discountType: item.discountType || 'FLAT',
         cgst,
         sgst,
         igst,
@@ -125,18 +160,27 @@ export const SalesBillingView: React.FC = () => {
       };
     });
 
-    const grandTotal = parseFloat((subTotal + cgstTotal + sgstTotal + igstTotal).toFixed(2));
+    grossTotal = parseFloat(grossTotal.toFixed(2));
+    discountTotal = parseFloat(discountTotal.toFixed(2));
+    subTotal = parseFloat(subTotal.toFixed(2));
+    cgstTotal = parseFloat(cgstTotal.toFixed(2));
+    sgstTotal = parseFloat(sgstTotal.toFixed(2));
+    igstTotal = parseFloat(igstTotal.toFixed(2));
+    const taxTotal = parseFloat((cgstTotal + sgstTotal + igstTotal).toFixed(2));
+    const grandTotal = parseFloat((subTotal + taxTotal).toFixed(2));
 
     return {
       items: computedItems,
+      grossTotal,
       subTotal,
       cgstTotal,
       sgstTotal,
       igstTotal,
       discountTotal,
+      taxTotal,
       grandTotal
     };
-  }, [items, isInterstate]);
+  }, [items, isInterstate, countryConfig]);
 
   // Operations: Add line product
   const handleAddItem = (productId: string) => {
@@ -148,6 +192,10 @@ export const SalesBillingView: React.FC = () => {
     if (existingIdx > -1) {
       const copy = [...items];
       copy[existingIdx].qty += 1;
+      if (copy[existingIdx].discountType === 'PERCENT' && copy[existingIdx].discountPercent) {
+        const lineGross = copy[existingIdx].price * copy[existingIdx].qty;
+        copy[existingIdx].discount = parseFloat(((lineGross * copy[existingIdx].discountPercent!) / 100).toFixed(2));
+      }
       setItems(copy);
     } else {
       setItems([
@@ -160,6 +208,8 @@ export const SalesBillingView: React.FC = () => {
           unit: prod.unit,
           price: prod.sellingPrice,
           discount: 0,
+          discountPercent: 0,
+          discountType: 'FLAT',
           gstRate: prod.gstRate,
           cgst: 0,
           sgst: 0,
@@ -171,19 +221,61 @@ export const SalesBillingView: React.FC = () => {
 
   const handleUpdateItemQty = (index: number, val: number) => {
     const copy = [...items];
-    copy[index].qty = Math.max(1, val);
-    setItems(copy);
-  };
-
-  const handleUpdateItemDiscount = (index: number, val: number) => {
-    const copy = [...items];
-    copy[index].discount = Math.max(0, val);
+    const newQty = Math.max(1, val);
+    copy[index].qty = newQty;
+    const lineGross = copy[index].price * newQty;
+    if (copy[index].discountType === 'PERCENT' && copy[index].discountPercent) {
+      copy[index].discount = parseFloat(((lineGross * copy[index].discountPercent!) / 100).toFixed(2));
+    } else if (copy[index].discount > lineGross) {
+      copy[index].discount = lineGross;
+    }
     setItems(copy);
   };
 
   const handleUpdateItemPrice = (index: number, val: number) => {
     const copy = [...items];
-    copy[index].price = Math.max(0, val);
+    const newPrice = Math.max(0, val);
+    copy[index].price = newPrice;
+    const lineGross = newPrice * copy[index].qty;
+    if (copy[index].discountType === 'PERCENT' && copy[index].discountPercent) {
+      copy[index].discount = parseFloat(((lineGross * copy[index].discountPercent!) / 100).toFixed(2));
+    } else if (copy[index].discount > lineGross) {
+      copy[index].discount = lineGross;
+    }
+    setItems(copy);
+  };
+
+  const handleUpdateItemDiscount = (index: number, val: number) => {
+    const copy = [...items];
+    const item = copy[index];
+    const lineGross = item.price * item.qty;
+    if (item.discountType === 'PERCENT') {
+      const pct = Math.min(100, Math.max(0, val));
+      item.discountPercent = pct;
+      item.discount = parseFloat(((lineGross * pct) / 100).toFixed(2));
+    } else {
+      const flat = Math.min(lineGross, Math.max(0, val));
+      item.discount = flat;
+      item.discountPercent = lineGross > 0 ? parseFloat(((flat / lineGross) * 100).toFixed(2)) : 0;
+    }
+    setItems(copy);
+  };
+
+  const handleToggleDiscountType = (index: number, forceType?: 'FLAT' | 'PERCENT') => {
+    const copy = [...items];
+    const item = copy[index];
+    const lineGross = item.price * item.qty;
+    const targetType = forceType || (item.discountType === 'PERCENT' ? 'FLAT' : 'PERCENT');
+    item.discountType = targetType;
+    if (targetType === 'PERCENT') {
+      item.discountPercent = lineGross > 0 ? parseFloat(((item.discount / lineGross) * 100).toFixed(2)) : (item.discountPercent || 0);
+    }
+    setItems(copy);
+  };
+
+  const handleUpdateItemTaxRate = (index: number, val: number) => {
+    const copy = [...items];
+    copy[index].gstRate = Math.max(0, val);
     setItems(copy);
   };
 
@@ -242,6 +334,7 @@ export const SalesBillingView: React.FC = () => {
       customerState: activeCustomer.state,
       billingAddress: activeCustomer.address,
       items: totals.items,
+      grossTotal: totals.grossTotal,
       subTotal: totals.subTotal,
       cgstTotal: totals.cgstTotal,
       sgstTotal: totals.sgstTotal,
@@ -280,10 +373,12 @@ export const SalesBillingView: React.FC = () => {
           customerGstin: activeCustomer?.gstin || '',
           customerState: activeCustomer?.state || '',
           items: totals.items,
+          grossTotal: totals.grossTotal,
           subTotal: totals.subTotal,
           cgstTotal: totals.cgstTotal,
           sgstTotal: totals.sgstTotal,
           igstTotal: totals.igstTotal,
+          discountTotal: totals.discountTotal,
           grandTotal: totals.grandTotal,
           reason: returnReason,
           financialYear: activeCompany?.financialYear || '2026-2027'
@@ -312,6 +407,7 @@ export const SalesBillingView: React.FC = () => {
         customerState: activeCustomer?.state || '',
         billingAddress: activeCustomer?.address || '',
         items: totals.items,
+        grossTotal: totals.grossTotal,
         subTotal: totals.subTotal,
         cgstTotal: totals.cgstTotal,
         sgstTotal: totals.sgstTotal,
@@ -455,12 +551,15 @@ export const SalesBillingView: React.FC = () => {
     // Table rows
     invData.items.forEach((item, index) => {
       const cleanSub = (item.price * item.qty) - item.discount;
+      const discText = (item.discountType === 'PERCENT' || (item.discountPercent && item.discountPercent > 0))
+        ? `${item.discountPercent}%`
+        : (item.discount > 0 ? item.discount.toFixed(2) : '0.00');
       doc.text(String(index + 1), lMargin + 2, y + 5);
       doc.text(item.name.substring(0, 32), lMargin + 12, y + 5);
       doc.text(item.hsnCode, lMargin + 65, y + 5);
       doc.text(`${item.qty} ${item.unit}`, lMargin + 82, y + 5);
       doc.text(item.price.toFixed(2), lMargin + 95, y + 5);
-      doc.text(item.discount.toFixed(2), lMargin + 115, y + 5);
+      doc.text(discText, lMargin + 115, y + 5);
       doc.text(`${item.gstRate}%`, lMargin + 130, y + 5);
       doc.text(cleanSub.toFixed(2), lMargin + 152, y + 5);
       doc.text(item.total.toFixed(2), lMargin + 168, y + 5);
@@ -488,39 +587,95 @@ export const SalesBillingView: React.FC = () => {
     }
 
     // Col Right: Sum totals
+    const grossVal = invData.grossTotal || (invData.subTotal + invData.discountTotal);
     doc.setFont('helvetica', 'semibold');
-    doc.text('Subtotal:', 135, y + 5);
-    doc.text('CGST Total:', 135, y + 10);
-    doc.text('SGST Total:', 135, y + 15);
-    doc.text('IGST Total:', 135, y + 20);
-    doc.text('Discount:', 135, y + 25);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('Grand Total:', 135, y + 32);
-
+    doc.text('Gross Total:', 130, y + 5);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`INR ${invData.subTotal.toFixed(2)}`, 165, y + 5);
-    doc.text(`INR ${invData.cgstTotal.toFixed(2)}`, 165, y + 10);
-    doc.text(`INR ${invData.sgstTotal.toFixed(2)}`, 165, y + 15);
-    doc.text(`INR ${invData.igstTotal.toFixed(2)}`, 165, y + 20);
-    doc.text(`INR ${invData.discountTotal.toFixed(2)}`, 165, y + 25);
-    
+    doc.text(`${countryConfig.currencyCode} ${grossVal.toFixed(2)}`, 165, y + 5);
+
+    let nextY = y + 10;
+    if (invData.discountTotal > 0) {
+      doc.setFont('helvetica', 'semibold');
+      doc.setTextColor(22, 101, 52);
+      doc.text('Less Discount:', 130, nextY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`- ${countryConfig.currencyCode} ${invData.discountTotal.toFixed(2)}`, 165, nextY);
+      doc.setTextColor(0, 0, 0);
+      nextY += 5;
+    }
+
+    doc.setFont('helvetica', 'semibold');
+    doc.text('Taxable Subtotal:', 130, nextY);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${countryConfig.currencyCode} ${invData.subTotal.toFixed(2)}`, 165, nextY);
+    nextY += 5;
+
+    if (countryConfig.taxSystem === 'dual_gst') {
+      doc.setFont('helvetica', 'semibold');
+      doc.text('CGST Total:', 130, nextY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${countryConfig.currencyCode} ${invData.cgstTotal.toFixed(2)}`, 165, nextY);
+      nextY += 5;
+
+      doc.setFont('helvetica', 'semibold');
+      doc.text('SGST Total:', 130, nextY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${countryConfig.currencyCode} ${invData.sgstTotal.toFixed(2)}`, 165, nextY);
+      nextY += 5;
+
+      doc.setFont('helvetica', 'semibold');
+      doc.text('IGST Total:', 130, nextY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${countryConfig.currencyCode} ${invData.igstTotal.toFixed(2)}`, 165, nextY);
+      nextY += 5;
+    } else if (countryConfig.taxSystem === 'canadian_gst_pst') {
+      if (invData.cgstTotal > 0) {
+        doc.setFont('helvetica', 'semibold');
+        doc.text('GST (5%):', 130, nextY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${countryConfig.currencyCode} ${invData.cgstTotal.toFixed(2)}`, 165, nextY);
+        nextY += 5;
+      }
+      if (invData.sgstTotal > 0) {
+        doc.setFont('helvetica', 'semibold');
+        doc.text('PST:', 130, nextY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${countryConfig.currencyCode} ${invData.sgstTotal.toFixed(2)}`, 165, nextY);
+        nextY += 5;
+      }
+      if (invData.igstTotal > 0) {
+        doc.setFont('helvetica', 'semibold');
+        doc.text('HST:', 130, nextY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${countryConfig.currencyCode} ${invData.igstTotal.toFixed(2)}`, 165, nextY);
+        nextY += 5;
+      }
+    } else {
+      const taxAmt = invData.igstTotal || (invData.cgstTotal + invData.sgstTotal);
+      doc.setFont('helvetica', 'semibold');
+      doc.text(`${countryConfig.taxName} Total:`, 130, nextY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${countryConfig.currencyCode} ${taxAmt.toFixed(2)}`, 165, nextY);
+      nextY += 5;
+    }
+
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Grand Total:', 130, nextY);
     doc.setFontSize(11);
-    doc.text(`INR ${invData.grandTotal.toFixed(2)}`, 165, y + 32);
+    doc.text(`${countryConfig.currencyCode} ${invData.grandTotal.toFixed(2)}`, 165, nextY);
 
     y += 42;
 
     // Footer signature declarations
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(7);
-    doc.text('Declare: The tax coordinates and items outline matches absolute compliance standard of CGST/SGST Act 2017.', lMargin, y);
+    doc.text(`Declare: ${countryConfig.legalDeclaration}`, lMargin, y);
     doc.text('This is a computer generated document, no manual signature is required.', lMargin, y + 4);
 
     if (autoDownload) {
-      doc.save(`GST_Invoice_${invData.invoiceNumber || 'File'}.pdf`);
+      doc.save(`${countryConfig.taxName}_Invoice_${invData.invoiceNumber || 'File'}.pdf`);
     } else {
       // Print overlay
       doc.autoPrint();
@@ -806,35 +961,71 @@ export const SalesBillingView: React.FC = () => {
             
             <div className="space-y-2 text-xs">
               <div className="flex justify-between text-gray-500">
-                <span>Taxable Value (Subtotal)</span>
-                <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(totals.subTotal)}</span>
+                <span>Gross Items Total</span>
+                <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(totals.grossTotal)}</span>
               </div>
-              <div className="flex justify-between text-gray-500">
-                <span>{countryConfig.stateTaxShorthand || 'CGST'} Amount {isInterstate ? '(IGST overrides)' : ''}</span>
-                <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(totals.cgstTotal)}</span>
+              {totals.discountTotal > 0 && (
+                <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50/60 dark:bg-emerald-950/20 px-2 py-1 rounded">
+                  <span>Less: Total Discount (-)</span>
+                  <span>- {formatCurrency(totals.discountTotal)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-gray-700 dark:text-zinc-200 font-semibold border-t border-gray-150 dark:border-zinc-800 pt-1.5">
+                <span>Taxable Base (Subtotal)</span>
+                <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(totals.subTotal)}</span>
               </div>
-              <div className="flex justify-between text-gray-500">
-                <span>{countryConfig.stateTaxShorthand || 'SGST'} Amount {isInterstate ? '(IGST overrides)' : ''}</span>
-                <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(totals.sgstTotal)}</span>
-              </div>
-              <div className="flex justify-between text-gray-500">
-                <span>{countryConfig.centralTaxShorthand || 'IGST'} Amount</span>
-                <span className="font-medium text-gray-900 dark:text-white text-blue-600">{formatCurrency(totals.igstTotal)}</span>
-              </div>
-              <div className="flex justify-between text-gray-500">
-                <span>Aggregated Discount</span>
-                <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(totals.discountTotal)}</span>
-              </div>
-              <div className="border-t border-gray-100 dark:border-zinc-800 pt-2 flex justify-between text-sm font-bold text-gray-900 dark:text-white">
+              {countryConfig.taxSystem === 'dual_gst' ? (
+                <>
+                  <div className="flex justify-between text-gray-500">
+                    <span>Central GST (CGST) {isInterstate ? '(Overridden by IGST)' : ''}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(totals.cgstTotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-500">
+                    <span>State GST (SGST) {isInterstate ? '(Overridden by IGST)' : ''}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(totals.sgstTotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-500">
+                    <span>Integrated GST (IGST)</span>
+                    <span className="font-medium text-gray-900 dark:text-white text-blue-600">{formatCurrency(totals.igstTotal)}</span>
+                  </div>
+                </>
+              ) : countryConfig.taxSystem === 'canadian_gst_pst' ? (
+                <>
+                  {totals.cgstTotal > 0 && (
+                    <div className="flex justify-between text-gray-500">
+                      <span>Federal GST (5%)</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(totals.cgstTotal)}</span>
+                    </div>
+                  )}
+                  {totals.sgstTotal > 0 && (
+                    <div className="flex justify-between text-gray-500">
+                      <span>Provincial PST</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(totals.sgstTotal)}</span>
+                    </div>
+                  )}
+                  {totals.igstTotal > 0 && (
+                    <div className="flex justify-between text-gray-500">
+                      <span>Harmonized Sales Tax (HST)</span>
+                      <span className="font-medium text-gray-900 dark:text-white text-blue-600">{formatCurrency(totals.igstTotal)}</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex justify-between text-gray-500">
+                  <span>{countryConfig.taxName} Total ({countryConfig.currencySymbol})</span>
+                  <span className="font-medium text-gray-900 dark:text-white text-blue-600 font-bold">{formatCurrency(totals.igstTotal)}</span>
+                </div>
+              )}
+              <div className="border-t border-gray-150 dark:border-zinc-800 pt-2 flex justify-between text-sm font-bold text-gray-900 dark:text-white">
                 <span>Invoice Total:</span>
                 <span className="text-lg text-blue-600 dark:text-blue-400">{formatCurrency(totals.grandTotal)}</span>
               </div>
             </div>
 
-            {totals.grandTotal > 50000 && (
+            {countryConfig.eWayBillApplicable && totals.grandTotal > 50000 && (
               <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-250/70 p-3 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed space-y-1">
                 <span className="font-extrabold text-[10px] uppercase tracking-wider block">⚠️ E-Way Bill Checklist Requirement</span>
-                <p>This invoice (₹{formatCurrency(totals.grandTotal)}) exceeds the ₹50,000 baseline transport rule. Please generate e-Way credentials on the portal and enter the bill serial below.</p>
+                <p>This invoice ({formatCurrency(totals.grandTotal)}) exceeds the ₹50,000 baseline transport rule. Please generate e-Way credentials on the portal and enter the bill serial below.</p>
               </div>
             )}
 
@@ -881,13 +1072,13 @@ export const SalesBillingView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Amt Received (Rs)</label>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Amt Received ({countryConfig.currencySymbol})</label>
                   <input
                     id="inp-invoice-received"
                     type="number"
                     value={receivedAmount}
                     onChange={(e: any) => setReceivedAmount(Math.max(0, parseFloat(e.target.value) || 0))}
-                    placeholder="INR Received"
+                    placeholder={`Amount Received (${countryConfig.currencySymbol})`}
                     className="w-full p-2 border border-gray-200 dark:border-zinc-800 dark:bg-zinc-900 rounded"
                   />
                 </div>
@@ -982,11 +1173,11 @@ export const SalesBillingView: React.FC = () => {
               <thead>
                 <tr className="border-b border-gray-200 dark:border-zinc-800 font-extrabold uppercase text-[9px] tracking-widest bg-gray-100/80 dark:bg-zinc-800/35 text-gray-500">
                   <th className="py-2.5 px-3 border-r border-gray-200 dark:border-zinc-850">Product Name</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 dark:border-zinc-850">HSN Code</th>
+                  <th className="py-2.5 px-3 border-r border-gray-200 dark:border-zinc-850">{countryConfig.hsnLabel}</th>
                   <th className="py-2.5 px-3 border-r border-gray-200 dark:border-zinc-850">Qty</th>
                   <th className="py-2.5 px-3 border-r border-gray-200 dark:border-zinc-850">Unit Price ({countryConfig.currencySymbol})</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 dark:border-zinc-850">Disc ({countryConfig.currencySymbol})</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 dark:border-zinc-850 text-center">GST Rate (%)</th>
+                  <th className="py-2.5 px-3 border-r border-gray-200 dark:border-zinc-850 text-center">Discount ({countryConfig.currencySymbol} / %)</th>
+                  <th className="py-2.5 px-3 border-r border-gray-200 dark:border-zinc-850 text-center">{countryConfig.taxName} Rate (%)</th>
                   <th className="py-2.5 px-3 border-r border-gray-200 dark:border-zinc-850 text-right">Row Total ({countryConfig.currencySymbol})</th>
                   <th className="py-2.5 px-3 text-center">Action</th>
                 </tr>
@@ -1020,20 +1211,57 @@ export const SalesBillingView: React.FC = () => {
                       />
                     </td>
                     <td className="py-2 px-3 border-r border-gray-150 dark:border-zinc-800/50">
-                      <input
-                        id={`inp-grid-disc-${idx}`}
-                        type="number"
-                        value={item.discount}
-                        onChange={(e: any) => handleUpdateItemDiscount(idx, parseFloat(e.target.value) || 0)}
-                        className="w-20 p-1 border border-gray-200 dark:border-zinc-750 dark:bg-zinc-900 rounded text-xs font-bold font-mono focus:border-blue-500 focus:outline-hidden"
-                        min="0"
-                      />
+                      <div className="flex items-center gap-1">
+                        <select
+                          value={item.discountType || 'FLAT'}
+                          onChange={(e) => handleToggleDiscountType(idx, e.target.value as 'FLAT' | 'PERCENT')}
+                          className={`p-1 text-[11px] font-extrabold rounded border cursor-pointer ${
+                            item.discountType === 'PERCENT'
+                              ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800'
+                              : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                          }`}
+                          title="Discount Mode: Percentage % or Currency Amount"
+                        >
+                          <option value="PERCENT">% Percent</option>
+                          <option value="FLAT">{countryConfig.currencySymbol} Amount</option>
+                        </select>
+
+                        <input
+                          id={`inp-grid-disc-${idx}`}
+                          type="number"
+                          value={item.discountType === 'PERCENT' ? (item.discountPercent !== undefined && item.discountPercent !== 0 ? item.discountPercent : '') : (item.discount !== undefined && item.discount !== 0 ? item.discount : '')}
+                          onChange={(e: any) => handleUpdateItemDiscount(idx, parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-16 p-1 border border-gray-200 dark:border-zinc-750 dark:bg-zinc-900 rounded text-xs font-bold font-mono focus:border-blue-500 focus:outline-hidden"
+                          min="0"
+                          max={item.discountType === 'PERCENT' ? 100 : undefined}
+                        />
+                      </div>
+                      {totals.items[idx]?.discount > 0 && (
+                        <span className="block text-[9px] text-emerald-600 dark:text-emerald-400 font-mono mt-0.5 font-semibold">
+                          {item.discountType === 'PERCENT'
+                            ? `= -${formatCurrency(totals.items[idx].discount)}`
+                            : `= -${totals.items[idx].discountPercent}%`}
+                        </span>
+                      )}
                     </td>
-                    <td className="py-2 px-3 border-r border-gray-150 dark:border-zinc-800/50 text-center font-bold font-mono text-gray-800 dark:text-zinc-200">
-                      {item.gstRate}%
+                    <td className="py-2 px-3 border-r border-gray-150 dark:border-zinc-800/50 text-center">
+                      <select
+                        value={item.gstRate}
+                        onChange={(e) => handleUpdateItemTaxRate(idx, parseFloat(e.target.value) || 0)}
+                        className="p-1 text-center font-mono font-bold text-xs bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-750 rounded focus:border-blue-500"
+                        title="Change line tax rate"
+                      >
+                        {countryConfig.taxRates.map((r) => (
+                          <option key={r} value={r}>{r}%</option>
+                        ))}
+                        {!countryConfig.taxRates.includes(item.gstRate) && (
+                          <option value={item.gstRate}>{item.gstRate}%</option>
+                        )}
+                      </select>
                     </td>
                     <td className="py-2 px-3 border-r border-gray-150 dark:border-zinc-800/50 text-right font-black font-mono text-[11px] text-gray-905 dark:text-zinc-100">
-                      {formatCurrency(((item.price * item.qty) - item.discount) * (1 + item.gstRate / 100))}
+                      {formatCurrency(totals.items[idx]?.total ?? 0)}
                     </td>
                     <td className="py-2 px-3 text-center">
                       <button
@@ -1086,14 +1314,14 @@ export const SalesBillingView: React.FC = () => {
                 <div>
                   <h2 className="text-lg font-black text-gray-900 dark:text-white">{activeCompany?.name || 'Company Name'}</h2>
                   <p className="text-gray-500 mt-0.5">{activeCompany?.address || 'Billing Address'}</p>
-                  <p className="text-gray-500 font-mono mt-1">GSTIN: <span className="font-bold text-gray-800 dark:text-zinc-200">{activeCompany?.gstin || 'N/A'}</span></p>
+                  <p className="text-gray-500 font-mono mt-1">{countryConfig.taxLabel}: <span className="font-bold text-gray-800 dark:text-zinc-200">{activeCompany?.gstin || 'N/A'}</span></p>
                 </div>
                 <div className="text-right">
                   <span className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 font-black rounded-lg text-xs uppercase tracking-wider">
                     TAX INVOICE
                   </span>
                   <p className="font-mono font-bold mt-2 text-gray-900 dark:text-white">{previewInvoice.invoiceNumber}</p>
-                  <p className="text-gray-500 mt-0.5">Date: {new Date(previewInvoice.date).toLocaleDateString('en-IN')}</p>
+                  <p className="text-gray-500 mt-0.5">Date: {new Date(previewInvoice.date).toLocaleDateString()}</p>
                 </div>
               </div>
 
@@ -1105,7 +1333,7 @@ export const SalesBillingView: React.FC = () => {
                   <p className="text-gray-600 dark:text-zinc-400 mt-0.5">{previewInvoice.billingAddress || 'No address provided'}</p>
                 </div>
                 <div className="text-right font-mono">
-                  <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest block mb-1">GSTIN</span>
+                  <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest block mb-1">{countryConfig.taxLabel}</span>
                   <span className="font-bold text-gray-800 dark:text-zinc-200">{previewInvoice.customerGstin || 'Consumer (URP)'}</span>
                   <p className="text-xs text-gray-500 mt-1">State: {previewInvoice.customerState}</p>
                 </div>
@@ -1117,11 +1345,11 @@ export const SalesBillingView: React.FC = () => {
                   <thead>
                     <tr className="bg-gray-100 dark:bg-zinc-800 text-[10px] font-bold uppercase text-gray-500 tracking-wider border-b border-gray-200 dark:border-zinc-800">
                       <th className="py-2.5 px-3">Item Description</th>
-                      <th className="py-2.5 px-3">HSN</th>
+                      <th className="py-2.5 px-3">{countryConfig.hsnLabel}</th>
                       <th className="py-2.5 px-3 text-center">Qty</th>
                       <th className="py-2.5 px-3 text-right">Rate</th>
                       <th className="py-2.5 px-3 text-right">Disc</th>
-                      <th className="py-2.5 px-3 text-center">GST</th>
+                      <th className="py-2.5 px-3 text-center">{countryConfig.taxName}</th>
                       <th className="py-2.5 px-3 text-right">Total</th>
                     </tr>
                   </thead>
@@ -1132,7 +1360,11 @@ export const SalesBillingView: React.FC = () => {
                         <td className="py-2.5 px-3 font-mono text-gray-500">{it.hsnCode}</td>
                         <td className="py-2.5 px-3 text-center font-mono">{it.qty} {it.unit || ''}</td>
                         <td className="py-2.5 px-3 text-right font-mono">{formatCurrency(it.price)}</td>
-                        <td className="py-2.5 px-3 text-right font-mono">{formatCurrency(it.discount)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono">
+                          {it.discountType === 'PERCENT' || (it.discountPercent && it.discountPercent > 0)
+                            ? `${it.discountPercent}% (${formatCurrency(it.discount)})`
+                            : formatCurrency(it.discount)}
+                        </td>
                         <td className="py-2.5 px-3 text-center font-mono">{it.gstRate}%</td>
                         <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900 dark:text-zinc-100">{formatCurrency(it.total)}</td>
                       </tr>
@@ -1144,8 +1376,16 @@ export const SalesBillingView: React.FC = () => {
               {/* Totals Summary */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-blue-50/40 dark:bg-blue-950/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
                 <div className="space-y-1 text-xs text-gray-600 dark:text-zinc-400">
-                  <p>Subtotal: <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{formatCurrency(previewInvoice.subTotal)}</span></p>
-                  <p>CGST Total: <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{formatCurrency(previewInvoice.cgstTotal)}</span> | SGST Total: <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{formatCurrency(previewInvoice.sgstTotal)}</span> | IGST Total: <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{formatCurrency(previewInvoice.igstTotal)}</span></p>
+                  <p>Gross Items Total: <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{formatCurrency(previewInvoice.grossTotal || (previewInvoice.subTotal + previewInvoice.discountTotal))}</span></p>
+                  {previewInvoice.discountTotal > 0 && (
+                    <p className="text-emerald-600 dark:text-emerald-400 font-semibold">Less Total Discount: <span className="font-mono font-bold">- {formatCurrency(previewInvoice.discountTotal)}</span></p>
+                  )}
+                  <p>Taxable Subtotal (Net): <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{formatCurrency(previewInvoice.subTotal)}</span></p>
+                  {countryConfig.taxSystem === 'dual_gst' ? (
+                    <p>CGST: <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{formatCurrency(previewInvoice.cgstTotal)}</span> | SGST: <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{formatCurrency(previewInvoice.sgstTotal)}</span> | IGST: <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{formatCurrency(previewInvoice.igstTotal)}</span></p>
+                  ) : (
+                    <p>{countryConfig.taxName} Total: <span className="font-mono font-bold text-gray-800 dark:text-zinc-200">{formatCurrency(previewInvoice.igstTotal || (previewInvoice.cgstTotal + previewInvoice.sgstTotal))}</span></p>
+                  )}
                   <p>Payment Mode: <span className="font-bold uppercase text-indigo-600">{previewInvoice.paymentMode}</span> ({previewInvoice.paymentStatus})</p>
                 </div>
                 <div className="text-right">
@@ -1214,8 +1454,8 @@ export const SalesBillingView: React.FC = () => {
                   rows={5}
                   value={
                     activeShareModal === 'whatsapp'
-                      ? `Dear ${activeCustomer?.name || 'Customer'}, Tax Invoice from ${activeCompany?.name || 'us'} has been issued. Total Invoice Cost: INR ${totals.grandTotal.toFixed(2)}. Thank you for trading with us!`
-                      : `Subject: Tax Invoice Issued - ${activeCompany?.name || 'Company'}\n\nDear ${activeCustomer?.name || 'Customer'},\n\nPlease find the summary of your recent GST Compliant Transaction with us.\nTotal Bill Amount: INR ${totals.grandTotal.toFixed(2)}.\n\nWarm regards,\n${activeCompany?.name || 'Billing Team'}`
+                      ? `Dear ${activeCustomer?.name || 'Customer'}, Tax Invoice from ${activeCompany?.name || 'us'} has been issued. Total Invoice Cost: ${countryConfig.currencySymbol}${totals.grandTotal.toFixed(2)}. Thank you for trading with us!`
+                      : `Subject: Tax Invoice Issued - ${activeCompany?.name || 'Company'}\n\nDear ${activeCustomer?.name || 'Customer'},\n\nPlease find the summary of your recent transaction with us.\nTotal Bill Amount: ${countryConfig.currencySymbol}${totals.grandTotal.toFixed(2)}.\n\nWarm regards,\n${activeCompany?.name || 'Billing Team'}`
                   }
                   className="w-full p-3 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-mono text-gray-800 dark:text-zinc-200 focus:outline-none"
                 />
@@ -1229,12 +1469,12 @@ export const SalesBillingView: React.FC = () => {
               )}
             </div>
 
-            <div className="p-4 px-6 bg-gray-50 dark:bg-zinc-850 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between gap-3">
+            <div className="p-4 px-6 bg-gray-50 dark:bg-zinc-855 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between gap-3">
               <button
                 onClick={() => {
                   const textToCopy = activeShareModal === 'whatsapp'
-                    ? `Dear ${activeCustomer?.name || 'Customer'}, Tax Invoice from ${activeCompany?.name || 'us'} has been issued. Total Invoice Cost: INR ${totals.grandTotal.toFixed(2)}. Thank you for trading with us!`
-                    : `Subject: Tax Invoice Issued - ${activeCompany?.name || 'Company'}\n\nDear ${activeCustomer?.name || 'Customer'},\n\nPlease find the summary of your recent GST Compliant Transaction with us.\nTotal Bill Amount: INR ${totals.grandTotal.toFixed(2)}.\n\nWarm regards,\n${activeCompany?.name || 'Billing Team'}`;
+                    ? `Dear ${activeCustomer?.name || 'Customer'}, Tax Invoice from ${activeCompany?.name || 'us'} has been issued. Total Invoice Cost: ${countryConfig.currencySymbol}${totals.grandTotal.toFixed(2)}. Thank you for trading with us!`
+                    : `Subject: Tax Invoice Issued - ${activeCompany?.name || 'Company'}\n\nDear ${activeCustomer?.name || 'Customer'},\n\nPlease find the summary of your recent transaction with us.\nTotal Bill Amount: ${countryConfig.currencySymbol}${totals.grandTotal.toFixed(2)}.\n\nWarm regards,\n${activeCompany?.name || 'Billing Team'}`;
                   navigator.clipboard.writeText(textToCopy);
                   setCopyFeedback(true);
                   setTimeout(() => setCopyFeedback(false), 3000);
@@ -1254,7 +1494,7 @@ export const SalesBillingView: React.FC = () => {
                 </button>
                 {activeShareModal === 'whatsapp' ? (
                   <a
-                    href={`https://api.whatsapp.com/send?phone=${activeCustomer?.phone || ''}&text=${encodeURIComponent(`Dear ${activeCustomer?.name || 'Customer'}, Tax Invoice from ${activeCompany?.name || 'us'} has been issued. Total Invoice Cost: INR ${totals.grandTotal.toFixed(2)}. Thank you for trading with us!`)}`}
+                    href={`https://api.whatsapp.com/send?phone=${activeCustomer?.phone || ''}&text=${encodeURIComponent(`Dear ${activeCustomer?.name || 'Customer'}, Tax Invoice from ${activeCompany?.name || 'us'} has been issued. Total Invoice Cost: ${countryConfig.currencySymbol}${totals.grandTotal.toFixed(2)}. Thank you for trading with us!`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow-md"
@@ -1264,7 +1504,7 @@ export const SalesBillingView: React.FC = () => {
                   </a>
                 ) : (
                   <a
-                    href={`mailto:${activeCustomer?.email || ''}?subject=${encodeURIComponent(`Tax Invoice Issued - ${activeCompany?.name || 'Company'}`)}&body=${encodeURIComponent(`Dear ${activeCustomer?.name || 'Customer'},\n\nPlease find the summary of your recent GST Compliant Transaction with us.\nTotal Bill Amount: INR ${totals.grandTotal.toFixed(2)}.\n\nWarm regards,\n${activeCompany?.name || 'Billing Team'}`)}`}
+                    href={`mailto:${activeCustomer?.email || ''}?subject=${encodeURIComponent(`Tax Invoice Issued - ${activeCompany?.name || 'Company'}`)}&body=${encodeURIComponent(`Dear ${activeCustomer?.name || 'Customer'},\n\nPlease find the summary of your recent transaction with us.\nTotal Bill Amount: ${countryConfig.currencySymbol}${totals.grandTotal.toFixed(2)}.\n\nWarm regards,\n${activeCompany?.name || 'Billing Team'}`)}`}
                     className="px-5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow-md"
                   >
                     <ExternalLink className="w-4 h-4" />

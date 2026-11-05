@@ -301,7 +301,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDarkMode(!darkMode);
   }, [darkMode, setDarkMode]);
 
-  const countryConfig = getCountryConfig(activeCompany?.country);
+  const countryConfig = useMemo(() => {
+    return getCountryConfig(
+      activeCompany?.country,
+      activeCompany?.customCountryTaxRates,
+      activeCompany?.enableManualTaxRates,
+      activeCompany?.customDefaultTaxRates
+    );
+  }, [
+    activeCompany?.country,
+    activeCompany?.customCountryTaxRates,
+    activeCompany?.enableManualTaxRates,
+    activeCompany?.customDefaultTaxRates
+  ]);
+
   const formatCurrency = useCallback((val: number) => {
     return formatCurrencyValue(val, activeCompany?.country);
   }, [activeCompany?.country]);

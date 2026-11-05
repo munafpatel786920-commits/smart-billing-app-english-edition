@@ -6,7 +6,7 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { statesOfIndia } from '../translations';
-import { getCountryConfig, COUNTRIES } from '../utils/countryConfig';
+import { getCountryConfig, COUNTRIES, CountryCode } from '../utils/countryConfig';
 import { 
   Building, 
   Settings, 
@@ -25,7 +25,12 @@ import {
   EyeOff,
   CheckCircle2,
   RotateCcw,
-  Loader2
+  Loader2,
+  Percent,
+  Sliders,
+  Plus,
+  Globe,
+  RefreshCw
 } from 'lucide-react';
 import { MasterResetScope } from '../types';
 import { BankAccountsManager } from './BankAccountsManager';
@@ -53,9 +58,41 @@ export const SettingsView: React.FC = () => {
   const [email, setEmail] = useState(activeCompany?.email || '');
   const [phone, setPhone] = useState(activeCompany?.phone || '');
   const [address, setAddress] = useState(activeCompany?.address || '');
-  const [country, setCountry] = useState<'IN' | 'US' | 'UK' | 'CA'>(activeCompany?.country || 'IN');
+  const [country, setCountry] = useState<CountryCode>((activeCompany?.country as CountryCode) || 'IN');
   
-  const selectedConfig = getCountryConfig(country);
+  // Manual Tax Rates State
+  const [enableManualTaxRates, setEnableManualTaxRates] = useState<boolean>(activeCompany?.enableManualTaxRates || false);
+
+  const [customCountryTaxRates, setCustomCountryTaxRates] = useState<Record<string, number[]>>(() => {
+    const initial: Record<string, number[]> = {};
+    Object.keys(COUNTRIES).forEach(code => {
+      initial[code] = activeCompany?.customCountryTaxRates?.[code]
+        ? [...activeCompany.customCountryTaxRates[code]!]
+        : [...COUNTRIES[code as CountryCode].taxRates];
+    });
+    return initial;
+  });
+
+  const [customDefaultTaxRates, setCustomDefaultTaxRates] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    Object.keys(COUNTRIES).forEach(code => {
+      initial[code] = activeCompany?.customDefaultTaxRates?.[code] !== undefined
+        ? activeCompany.customDefaultTaxRates[code]!
+        : COUNTRIES[code as CountryCode].defaultTaxRate;
+    });
+    return initial;
+  });
+
+  const [editingTaxCountry, setEditingTaxCountry] = useState<CountryCode>((activeCompany?.country as CountryCode) || 'IN');
+  const [newSlabRateInput, setNewSlabRateInput] = useState('');
+  const [taxRateActionNotice, setTaxRateActionNotice] = useState<string | null>(null);
+
+  const selectedConfig = getCountryConfig(
+    country,
+    customCountryTaxRates,
+    enableManualTaxRates,
+    customDefaultTaxRates
+  );
 
   const [state, setState] = useState(activeCompany?.state || (selectedConfig?.statesOrProvinces[0] || 'Maharashtra'));
   const [gstin, setGstin] = useState(activeCompany?.gstin || '');
@@ -72,7 +109,8 @@ export const SettingsView: React.FC = () => {
       setEmail(activeCompany.email || '');
       setPhone(activeCompany.phone || '');
       setAddress(activeCompany.address || '');
-      setCountry(activeCompany.country || 'IN');
+      setCountry((activeCompany.country as CountryCode) || 'IN');
+      setEditingTaxCountry((activeCompany.country as CountryCode) || 'IN');
       setState(activeCompany.state || '');
       setGstin(activeCompany.gstin || '');
       setLogoUrl(activeCompany.logoUrl || '');
@@ -85,15 +123,111 @@ export const SettingsView: React.FC = () => {
       setUpiId(activeCompany.upiId || '');
       setFinancialYear(activeCompany.financialYear || '2026-2027');
       setFinancialYears(activeCompany.financialYears || ['2025-2026', '2026-2027', '2027-2028', '2028-2029']);
+      setEnableManualTaxRates(activeCompany.enableManualTaxRates || false);
+
+      const newCustomRates: Record<string, number[]> = {};
+      const newDefaultRates: Record<string, number> = {};
+      Object.keys(COUNTRIES).forEach(code => {
+        newCustomRates[code] = activeCompany.customCountryTaxRates?.[code]
+          ? [...activeCompany.customCountryTaxRates[code]!]
+          : [...COUNTRIES[code as CountryCode].taxRates];
+        newDefaultRates[code] = activeCompany.customDefaultTaxRates?.[code] !== undefined
+          ? activeCompany.customDefaultTaxRates[code]!
+          : COUNTRIES[code as CountryCode].defaultTaxRate;
+      });
+      setCustomCountryTaxRates(newCustomRates);
+      setCustomDefaultTaxRates(newDefaultRates);
     }
   }, [activeCompany]);
 
-  const handleCountryChange = (newCountry: 'IN' | 'US' | 'UK' | 'CA') => {
+  const handleCountryChange = (newCountry: CountryCode) => {
     setCountry(newCountry);
-    const config = getCountryConfig(newCountry);
+    setEditingTaxCountry(newCountry);
+    const config = getCountryConfig(newCountry, customCountryTaxRates, enableManualTaxRates, customDefaultTaxRates);
     if (config && config.statesOrProvinces.length > 0) {
       setState(config.statesOrProvinces[0]);
     }
+  };
+
+  const handleAddTaxSlab = (cCode: CountryCode) => {
+    const rateVal = parseFloat(newSlabRateInput);
+    if (isNaN(rateVal) || rateVal < 0 || rateVal > 100) {
+      alert('Please enter a valid tax rate percentage between 0% and 100% (e.g. 6, 12, 18, 22.5).');
+      return;
+    }
+    const currentRates = customCountryTaxRates[cCode] || COUNTRIES[cCode].taxRates;
+    if (currentRates.includes(rateVal)) {
+      alert(`Tax rate ${rateVal}% already exists in ${COUNTRIES[cCode].name}.`);
+      return;
+    }
+    const updated = [...currentRates, rateVal].sort((a, b) => a - b);
+    setCustomCountryTaxRates(prev => ({
+      ...prev,
+      [cCode]: updated
+    }));
+    setNewSlabRateInput('');
+    setTaxRateActionNotice(`Tax slab ${rateVal}% added for ${COUNTRIES[cCode].flag} ${COUNTRIES[cCode].name}! Click 'Update Company Profile' below to save.`);
+    setTimeout(() => setTaxRateActionNotice(null), 4000);
+  };
+
+  const handleRemoveTaxSlab = (cCode: CountryCode, rateToRemove: number) => {
+    const currentRates = customCountryTaxRates[cCode] || COUNTRIES[cCode].taxRates;
+    if (currentRates.length <= 1) {
+      alert('At least one tax rate slab must be maintained for compliance calculations.');
+      return;
+    }
+    const updated = currentRates.filter(r => r !== rateToRemove);
+    setCustomCountryTaxRates(prev => ({
+      ...prev,
+      [cCode]: updated
+    }));
+    if (customDefaultTaxRates[cCode] === rateToRemove) {
+      setCustomDefaultTaxRates(prev => ({
+        ...prev,
+        [cCode]: updated[0] || 0
+      }));
+    }
+    setTaxRateActionNotice(`Tax slab ${rateToRemove}% removed from ${COUNTRIES[cCode].name}. Click 'Update Company Profile' below to save.`);
+    setTimeout(() => setTaxRateActionNotice(null), 4000);
+  };
+
+  const handleSetDefaultTaxRate = (cCode: CountryCode, rate: number) => {
+    setCustomDefaultTaxRates(prev => ({
+      ...prev,
+      [cCode]: rate
+    }));
+    setTaxRateActionNotice(`Default standard rate set to ${rate}% for ${COUNTRIES[cCode].name}.`);
+    setTimeout(() => setTaxRateActionNotice(null), 3000);
+  };
+
+  const handleApplyToAllCountries = (sourceCountry: CountryCode) => {
+    const sourceRates = customCountryTaxRates[sourceCountry] || COUNTRIES[sourceCountry].taxRates;
+    const sourceDefault = customDefaultTaxRates[sourceCountry] ?? COUNTRIES[sourceCountry].defaultTaxRate;
+    const newRatesMap: Record<string, number[]> = {};
+    const newDefaultsMap: Record<string, number> = {};
+
+    Object.keys(COUNTRIES).forEach(code => {
+      newRatesMap[code] = [...sourceRates];
+      newDefaultsMap[code] = sourceDefault;
+    });
+
+    setCustomCountryTaxRates(newRatesMap);
+    setCustomDefaultTaxRates(newDefaultsMap);
+    setTaxRateActionNotice(`Tax slabs from ${COUNTRIES[sourceCountry].flag} ${COUNTRIES[sourceCountry].name} successfully applied to all 9 countries! Click 'Update Company Profile' below to save.`);
+    setTimeout(() => setTaxRateActionNotice(null), 5000);
+  };
+
+  const handleResetCountryTaxRates = (cCode: CountryCode) => {
+    setCustomCountryTaxRates(prev => ({
+      ...prev,
+      [cCode]: [...COUNTRIES[cCode].taxRates]
+    }));
+    setCustomDefaultTaxRates(prev => ({
+      ...prev,
+      [cCode]: COUNTRIES[cCode].defaultTaxRate
+    }));
+    setTaxRateActionNotice(`Tax slabs for ${COUNTRIES[cCode].name} restored to official government standards.`);
+    setTimeout(() => setTaxRateActionNotice(null), 3500);
   };
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -255,7 +389,10 @@ export const SettingsView: React.FC = () => {
         upiId,
         country,
         financialYear,
-        financialYears
+        financialYears,
+        enableManualTaxRates,
+        customCountryTaxRates,
+        customDefaultTaxRates
       });
 
       alert('Company profile settings updated successfully! Page datasets synchronized.');
@@ -387,18 +524,19 @@ export const SettingsView: React.FC = () => {
               <select
                 id="form-c-country"
                 value={country}
-                onChange={(e) => handleCountryChange(e.target.value as any)}
+                onChange={(e) => handleCountryChange(e.target.value as CountryCode)}
                 className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800 border border-gray-205 dark:border-zinc-800 rounded-lg text-gray-900 dark:text-white font-bold"
               >
-                <option value="IN">🇮🇳 India</option>
-                <option value="US">🇺🇸 United States (USA)</option>
-                <option value="UK">🇬🇧 United Kingdom (UK)</option>
-                <option value="CA">🇨🇦 Canada (CAN)</option>
+                {Object.values(COUNTRIES).map(c => (
+                  <option key={c.code} value={c.code}>
+                    {c.flag} {c.name} ({c.taxName} • {c.currencyCode})
+                  </option>
+                ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1">Company Registered state *</label>
+              <label className="block text-xs font-bold text-gray-500 mb-1">Company Registered State / Province *</label>
               <select
                 id="form-c-state"
                 value={state}
@@ -419,22 +557,317 @@ export const SettingsView: React.FC = () => {
                 onChange={(e) => setGstin(e.target.value.toUpperCase())}
                 placeholder={selectedConfig.taxLabelPlaceholder}
                 className={`w-full p-2.5 bg-gray-50 dark:bg-zinc-800 border rounded-lg font-mono font-extrabold focus:outline-none ${
-                  country === 'IN' && gstin
-                    ? /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin)
-                      ? 'border-emerald-550 text-emerald-600 dark:text-emerald-400 focus:border-emerald-550'
-                      : 'border-yellow-500 text-yellow-600 focus:border-yellow-500'
+                  gstin
+                    ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500'
                     : 'border-gray-205 dark:border-zinc-800 text-blue-600 focus:border-indigo-500'
                 }`}
               />
-              {country === 'IN' && gstin && (
-                <p className="text-[10px] mt-1 font-sans">
-                  {/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin) ? (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">✓ Valid Indian GSTIN alphanumeric layout</span>
-                  ) : (
-                    <span className="text-yellow-600 dark:text-yellow-500 font-semibold">⚠ Expected 15-digit layout: State(2) + PAN(10) + Entity(1) + Z(1) + Checksum(1)</span>
-                  )}
-                </p>
+              <p className="text-[10px] mt-1 text-gray-500 font-sans">
+                {selectedConfig.taxFormatLabel}
+              </p>
+            </div>
+
+            {/* LIVE COUNTRY TAX COMPLIANCE BADGE */}
+            <div className="col-span-1 sm:col-span-3 p-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-zinc-850 dark:to-zinc-900 border border-blue-200/60 dark:border-zinc-700/60 rounded-xl space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-200/40 dark:border-zinc-700 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{selectedConfig.flag}</span>
+                  <div>
+                    <h4 className="text-xs font-black uppercase text-gray-900 dark:text-white tracking-wider flex items-center gap-2">
+                      <span>{selectedConfig.name}</span>
+                      <span className="px-2 py-0.5 bg-blue-600 text-white rounded text-[10px] font-extrabold uppercase">
+                        {selectedConfig.taxName} Active
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-gray-500">
+                      Currency: <strong className="text-gray-900 dark:text-white font-mono">{selectedConfig.currencyCode} ({selectedConfig.currencySymbol})</strong> | Tax ID: <strong className="text-gray-900 dark:text-white">{selectedConfig.taxLabel}</strong>
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Standard Tax Rate</span>
+                  <span className="text-base font-black text-blue-600 dark:text-blue-400">{selectedConfig.defaultTaxRate}% {selectedConfig.taxName}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                <div className="p-2.5 bg-white/70 dark:bg-zinc-800/70 rounded-lg border border-gray-150 dark:border-zinc-700">
+                  <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Tax System Structure</span>
+                  <p className="font-bold text-gray-800 dark:text-zinc-200 mt-0.5">
+                    {selectedConfig.taxSystem === 'dual_gst' ? 'Intrastate (CGST + SGST) & Interstate (IGST)' :
+                     selectedConfig.taxSystem === 'single_vat' ? `Single Unified ${selectedConfig.taxName} Rate` :
+                     selectedConfig.taxSystem === 'us_sales_tax' ? 'State & Local Origin/Destination Sales Tax' :
+                     'Federal GST (5%) + Provincial PST / HST'}
+                  </p>
+                </div>
+                <div className="p-2.5 bg-white/70 dark:bg-zinc-800/70 rounded-lg border border-gray-150 dark:border-zinc-700">
+                  <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Standard Tax Slabs</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {selectedConfig.taxRates.map((rate) => (
+                      <span key={rate} className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                        rate === selectedConfig.defaultTaxRate
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 dark:bg-zinc-700 text-gray-700 dark:text-zinc-300'
+                      }`}>
+                        {rate}%
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-2.5 bg-white/70 dark:bg-zinc-800/70 rounded-lg border border-gray-150 dark:border-zinc-700">
+                  <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Live Invoice Example</span>
+                  <p className="font-mono text-[11px] text-gray-700 dark:text-zinc-300 mt-0.5">
+                    Subtotal: <strong>{selectedConfig.currencySymbol}1,000.00</strong> + {selectedConfig.taxName} ({selectedConfig.defaultTaxRate}%): <strong>{selectedConfig.currencySymbol}{(1000 * selectedConfig.defaultTaxRate / 100).toFixed(2)}</strong> = <strong>{selectedConfig.currencySymbol}{(1000 * (1 + selectedConfig.defaultTaxRate / 100)).toFixed(2)}</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* MANUAL TAX RATES / CUSTOM TAX SLABS CONFIGURATION */}
+            <div className="col-span-1 sm:col-span-3 p-5 bg-white dark:bg-zinc-850 rounded-2xl border-2 border-indigo-200/70 dark:border-indigo-900/60 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-150 dark:border-zinc-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                    <Sliders className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      <span>Country Tax Rate Settings</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                        enableManualTaxRates
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300'
+                          : 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-300'
+                      }`}>
+                        {enableManualTaxRates ? '✓ Manual Rates Active' : '🏛️ Official Preset Rates'}
+                      </span>
+                    </h4>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Configure custom tax rates for each country or use official government preset slabs.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Mode Selector Toggle */}
+                <div className="flex items-center gap-2 bg-gray-100 dark:bg-zinc-800 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setEnableManualTaxRates(false)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:cursor-pointer ${
+                      !enableManualTaxRates
+                        ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-xs'
+                        : 'text-gray-500 hover:text-gray-800 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    Official Standard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEnableManualTaxRates(true)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:cursor-pointer ${
+                      enableManualTaxRates
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-gray-500 hover:text-gray-800 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    ✏️ Manual / Custom Rates
+                  </button>
+                </div>
+              </div>
+
+              {/* Action feedback alert banner */}
+              {taxRateActionNotice && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-250 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs flex items-center gap-2 font-medium">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>{taxRateActionNotice}</span>
+                </div>
               )}
+
+              {/* Country Picker Tabs */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  <span>Select Country to Configure Tax Slabs:</span>
+                  <span className="text-[11px] text-indigo-600 dark:text-indigo-400 normal-case font-semibold">
+                    Current Company: {COUNTRIES[country].flag} {COUNTRIES[country].name}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.values(COUNTRIES).map(c => {
+                    const isSelected = editingTaxCountry === c.code;
+                    const isCompanyCountry = country === c.code;
+                    return (
+                      <button
+                        key={c.code}
+                        type="button"
+                        onClick={() => setEditingTaxCountry(c.code)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all hover:cursor-pointer border ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                            : 'bg-gray-50 dark:bg-zinc-800/80 text-gray-700 dark:text-zinc-300 border-gray-200 dark:border-zinc-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span>{c.flag}</span>
+                        <span>{c.name.split(' ')[0]}</span>
+                        <span className={`text-[10px] px-1 py-0.2 rounded font-mono ${
+                          isSelected ? 'bg-indigo-800 text-indigo-100' : 'bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-400'
+                        }`}>
+                          {c.taxName}
+                        </span>
+                        {isCompanyCountry && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Your Registered Country"></span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Active Editing Country Card */}
+              {(() => {
+                const activeC = COUNTRIES[editingTaxCountry];
+                const activeRates = customCountryTaxRates[editingTaxCountry] || activeC.taxRates;
+                const activeDefaultRate = customDefaultTaxRates[editingTaxCountry] ?? activeC.defaultTaxRate;
+
+                return (
+                  <div className="p-4 bg-gray-50/70 dark:bg-zinc-800/50 rounded-xl border border-gray-200 dark:border-zinc-750 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200/60 dark:border-zinc-700 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-3xl">{activeC.flag}</span>
+                        <div>
+                          <h5 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
+                            <span>{activeC.name}</span>
+                            <span className="text-xs px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded font-mono font-bold">
+                              Tax: {activeC.taxName}
+                            </span>
+                            <span className="text-xs text-gray-500 font-mono">
+                              ({activeC.currencyCode} - {activeC.currencySymbol})
+                            </span>
+                          </h5>
+                          <p className="text-[11px] text-gray-500">
+                            Structure: {activeC.taxSystem === 'dual_gst' ? 'Dual GST (CGST + SGST / IGST)' : activeC.taxSystem === 'single_vat' ? 'Single VAT' : activeC.taxSystem === 'canadian_gst_pst' ? 'GST + PST/HST' : 'Sales Tax'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleApplyToAllCountries(editingTaxCountry)}
+                          title="Copy these tax rates to all 9 countries"
+                          className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold flex items-center gap-1.5 hover:cursor-pointer transition-colors"
+                        >
+                          <Globe className="w-3.5 h-3.5" />
+                          Apply Slabs to All Countries
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleResetCountryTaxRates(editingTaxCountry)}
+                          title="Restore official government presets for this country"
+                          className="px-3 py-1.5 bg-gray-100 dark:bg-zinc-700 hover:bg-gray-200 text-gray-700 dark:text-zinc-200 rounded-lg text-xs font-bold flex items-center gap-1.5 hover:cursor-pointer transition-colors"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          Reset to Official Slabs
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Slabs Pill Display & Delete */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 dark:text-zinc-300 mb-1.5 uppercase tracking-wide">
+                        Active Tax Rate Slabs ({activeRates.length} Slabs Configured):
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {activeRates.map((rate) => {
+                          const isDefault = rate === activeDefaultRate;
+                          return (
+                            <div
+                              key={rate}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-mono font-bold text-xs shadow-2xs ${
+                                isDefault
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border-gray-250 dark:border-zinc-700'
+                              }`}
+                            >
+                              <span>{rate}%</span>
+                              {isDefault && (
+                                <span className="text-[9px] bg-blue-800 text-white px-1 py-0.2 rounded font-sans font-extrabold uppercase">
+                                  Default
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTaxSlab(editingTaxCountry, rate)}
+                                title={`Remove ${rate}% slab`}
+                                className={`ml-1 p-0.5 rounded-full hover:cursor-pointer transition-colors ${
+                                  isDefault
+                                    ? 'hover:bg-blue-700 text-blue-200'
+                                    : 'hover:bg-red-50 dark:hover:bg-red-955/50 text-gray-400 hover:text-red-500'
+                                }`}
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Controls: Add New Slab & Pick Default */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                      {/* Add New Slab */}
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">
+                          ➕ ADD NEW TAX SLAB (%)
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            placeholder="e.g. 6, 12.5, 14, 22"
+                            value={newSlabRateInput}
+                            onChange={(e) => setNewSlabRateInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddTaxSlab(editingTaxCountry);
+                              }
+                            }}
+                            className="flex-1 p-2 bg-white dark:bg-zinc-900 border border-gray-250 dark:border-zinc-700 rounded-lg text-xs font-mono font-bold text-gray-900 dark:text-white focus:outline-indigo-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddTaxSlab(editingTaxCountry)}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm hover:cursor-pointer transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add Slab
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Select Default Rate */}
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">
+                          ⭐ DEFAULT TAX RATE FOR NEW PRODUCTS
+                        </label>
+                        <select
+                          value={activeDefaultRate}
+                          onChange={(e) => handleSetDefaultTaxRate(editingTaxCountry, parseFloat(e.target.value) || 0)}
+                          className="w-full p-2 bg-white dark:bg-zinc-900 border border-gray-250 dark:border-zinc-700 rounded-lg text-xs font-mono font-bold text-gray-900 dark:text-white"
+                        >
+                          {activeRates.map((r) => (
+                            <option key={r} value={r}>
+                              {r}% Standard {r === 0 ? '(Tax Exempt)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="col-span-1 sm:col-span-3 pb-4 pt-4 border-t border-b border-gray-150/40 dark:border-zinc-800 flex flex-col md:flex-row items-stretch md:items-center gap-6">

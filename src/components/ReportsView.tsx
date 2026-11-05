@@ -293,7 +293,7 @@ export const ReportsView: React.FC = () => {
     doc.text('Disc', lMargin + 115, y + 5);
     doc.text('GST Rate', lMargin + 130, y + 5);
     doc.text('Tax Val', lMargin + 152, y + 5);
-    doc.text('Total (Rs)', lMargin + 168, y + 5);
+    doc.text(`Total (${countryConfig.currencySymbol})`, lMargin + 168, y + 5);
 
     y += 7;
     doc.setFont('helvetica', 'normal');
@@ -341,15 +341,15 @@ export const ReportsView: React.FC = () => {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`INR ${invData.subTotal.toFixed(2)}`, 165, y + 5);
-    doc.text(`INR ${invData.cgstTotal.toFixed(2)}`, 165, y + 10);
-    doc.text(`INR ${invData.sgstTotal.toFixed(2)}`, 165, y + 15);
-    doc.text(`INR ${invData.igstTotal.toFixed(2)}`, 165, y + 20);
-    doc.text(`INR ${invData.discountTotal.toFixed(2)}`, 165, y + 25);
+    doc.text(`${countryConfig.currencyCode} ${invData.subTotal.toFixed(2)}`, 165, y + 5);
+    doc.text(`${countryConfig.currencyCode} ${invData.cgstTotal.toFixed(2)}`, 165, y + 10);
+    doc.text(`${countryConfig.currencyCode} ${invData.sgstTotal.toFixed(2)}`, 165, y + 15);
+    doc.text(`${countryConfig.currencyCode} ${invData.igstTotal.toFixed(2)}`, 165, y + 20);
+    doc.text(`${countryConfig.currencyCode} ${invData.discountTotal.toFixed(2)}`, 165, y + 25);
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text(`INR ${invData.grandTotal.toFixed(2)}`, 165, y + 32);
+    doc.text(`${countryConfig.currencyCode} ${invData.grandTotal.toFixed(2)}`, 165, y + 32);
 
     y += 42;
 
@@ -443,7 +443,7 @@ export const ReportsView: React.FC = () => {
     doc.text('Disc', lMargin + 115, y + 5);
     doc.text('GST Rate', lMargin + 130, y + 5);
     doc.text('Tax Val', lMargin + 152, y + 5);
-    doc.text('Total (Rs)', lMargin + 168, y + 5);
+    doc.text(`Total (${countryConfig.currencySymbol})`, lMargin + 168, y + 5);
 
     y += 7;
     doc.setFont('helvetica', 'normal');
@@ -475,8 +475,8 @@ export const ReportsView: React.FC = () => {
     doc.setFontSize(8);
     doc.text('The supplies detailed in this bill have been securely accepted', lMargin, y + 5);
     doc.text('and registered in the stock ledger.', lMargin, y + 10);
-    doc.text(`Paid to Vendor: INR ${purData.paidAmount.toFixed(2)}`, lMargin, y + 15);
-    doc.text(`Outstanding Balance: INR ${(purData.grandTotal - purData.paidAmount).toFixed(2)}`, lMargin, y + 20);
+    doc.text(`Paid to Vendor: ${countryConfig.currencyCode} ${purData.paidAmount.toFixed(2)}`, lMargin, y + 15);
+    doc.text(`Outstanding Balance: ${countryConfig.currencyCode} ${(purData.grandTotal - purData.paidAmount).toFixed(2)}`, lMargin, y + 20);
 
     doc.setFont('helvetica', 'semibold');
     doc.text('Subtotal:', 135, y + 5);
@@ -491,15 +491,15 @@ export const ReportsView: React.FC = () => {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`INR ${purData.subTotal.toFixed(2)}`, 165, y + 5);
-    doc.text(`INR ${purData.cgstTotal.toFixed(2)}`, 165, y + 10);
-    doc.text(`INR ${purData.sgstTotal.toFixed(2)}`, 165, y + 15);
-    doc.text(`INR ${purData.igstTotal.toFixed(2)}`, 165, y + 20);
-    doc.text(`INR ${purData.discountTotal.toFixed(2)}`, 165, y + 25);
+    doc.text(`${countryConfig.currencyCode} ${purData.subTotal.toFixed(2)}`, 165, y + 5);
+    doc.text(`${countryConfig.currencyCode} ${purData.cgstTotal.toFixed(2)}`, 165, y + 10);
+    doc.text(`${countryConfig.currencyCode} ${purData.sgstTotal.toFixed(2)}`, 165, y + 15);
+    doc.text(`${countryConfig.currencyCode} ${purData.igstTotal.toFixed(2)}`, 165, y + 20);
+    doc.text(`${countryConfig.currencyCode} ${purData.discountTotal.toFixed(2)}`, 165, y + 25);
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text(`INR ${purData.grandTotal.toFixed(2)}`, 165, y + 32);
+    doc.text(`${countryConfig.currencyCode} ${purData.grandTotal.toFixed(2)}`, 165, y + 32);
 
     y += 42;
 
@@ -935,7 +935,7 @@ export const ReportsView: React.FC = () => {
     doc.text('Particular / Title', lMargin + 35, y + 5);
     doc.text('Category', lMargin + 95, y + 5);
     doc.text('Payment Via', lMargin + 140, y + 5);
-    doc.text('Amount (Rs)', lMargin + 165, y + 5);
+    doc.text(`Amount (${countryConfig.currencySymbol})`, lMargin + 165, y + 5);
 
     y += 7;
     doc.setFont('helvetica', 'normal');
@@ -954,7 +954,7 @@ export const ReportsView: React.FC = () => {
         doc.text('Particular / Title', lMargin + 35, y + 5);
         doc.text('Category', lMargin + 95, y + 5);
         doc.text('Payment Via', lMargin + 140, y + 5);
-        doc.text('Amount (Rs)', lMargin + 165, y + 5);
+        doc.text(`Amount (${countryConfig.currencySymbol})`, lMargin + 165, y + 5);
         y += 7;
         doc.setFont('helvetica', 'normal');
       }
@@ -977,7 +977,7 @@ export const ReportsView: React.FC = () => {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     doc.text('TOTAL DEBITED OVERHEADS:', lMargin, y);
-    doc.text(`INR ${runningTotal.toFixed(2)}`, 165, y);
+    doc.text(`${countryConfig.currencyCode} ${runningTotal.toFixed(2)}`, 165, y);
 
     y += 15;
     doc.setFont('helvetica', 'italic');
@@ -1692,20 +1692,20 @@ export const ReportsView: React.FC = () => {
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 block mb-0.5">
-                  GSTR-1 Sales Audit Report
+                  {countryConfig.code === 'IN' ? 'GSTR-1 Sales Audit Report' : `${countryConfig.taxName} Sales Audit Report`}
                 </span>
                 <h3 className="text-base font-black text-gray-950">
                   {activeCompany?.name || "Nirmal Hardware Store"}
                 </h3>
                 {activeCompany?.gstin && (
                   <p className="text-[10px] font-mono font-bold text-gray-800 mt-0.5">
-                    GSTIN: {activeCompany.gstin}
+                    {countryConfig.taxLabel}: {activeCompany.gstin}
                   </p>
                 )}
               </div>
               <div className="text-right text-[10px] text-gray-500">
-                <p className="font-bold">Period: {activeDateRange.start.toLocaleDateString('en-IN')} - {activeDateRange.end.toLocaleDateString('en-IN')}</p>
-                <p className="mt-0.5 text-[9px]">Generated: {new Date().toLocaleDateString('en-IN')}</p>
+                <p className="font-bold">Period: {activeDateRange.start.toLocaleDateString()} - {activeDateRange.end.toLocaleDateString()}</p>
+                <p className="mt-0.5 text-[9px]">Generated: {new Date().toLocaleDateString()}</p>
               </div>
             </div>
           </div>
@@ -1713,7 +1713,7 @@ export const ReportsView: React.FC = () => {
           <div className="flex justify-between items-center text-xs">
             <h4 id="rep-gstr1-title" className="font-semibold text-gray-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1">
               <FileCheck className="w-4 h-4 text-blue-600" />
-              GSTR-1 Audit (Sales Tax)
+              {countryConfig.code === 'IN' ? 'GSTR-1 Audit (Sales Tax)' : `${countryConfig.taxName} Output Tax Audit`}
             </h4>
             <div className="flex items-center gap-2 print:hidden">
               <button
@@ -1743,24 +1743,49 @@ export const ReportsView: React.FC = () => {
                 {formatCurrency(salesGstSummary.taxableAmount)}
               </span>
             </div>
-            <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
-              <span className="text-[10px] text-gray-400 font-bold uppercase block">Integrated Tax (IGST)</span>
-              <span className="text-sm font-extrabold text-blue-600 block mt-1">
-                {formatCurrency(salesGstSummary.igst)}
-              </span>
-            </div>
-            <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
-              <span className="text-[10px] text-gray-400 font-bold uppercase block">Central Tax ({countryConfig.stateTaxShorthand || 'CGST'})</span>
-              <span className="text-sm font-semibold text-gray-805 dark:text-zinc-300 block mt-1">
-                {formatCurrency(salesGstSummary.cgst)}
-              </span>
-            </div>
-            <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
-              <span className="text-[10px] text-gray-400 font-bold uppercase block">State/Local Tax ({countryConfig.stateTaxShorthand || 'SGST'})</span>
-              <span className="text-sm font-semibold text-gray-805 dark:text-zinc-300 block mt-1">
-                {formatCurrency(salesGstSummary.sgst)}
-              </span>
-            </div>
+            {countryConfig.taxSystem === 'dual_gst' ? (
+              <>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">Integrated Tax (IGST)</span>
+                  <span className="text-sm font-extrabold text-blue-600 block mt-1">
+                    {formatCurrency(salesGstSummary.igst)}
+                  </span>
+                </div>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">Central Tax (CGST)</span>
+                  <span className="text-sm font-semibold text-gray-805 dark:text-zinc-300 block mt-1">
+                    {formatCurrency(salesGstSummary.cgst)}
+                  </span>
+                </div>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">State Tax (SGST)</span>
+                  <span className="text-sm font-semibold text-gray-805 dark:text-zinc-300 block mt-1">
+                    {formatCurrency(salesGstSummary.sgst)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">{countryConfig.taxName} Collected</span>
+                  <span className="text-sm font-extrabold text-blue-600 block mt-1">
+                    {formatCurrency(salesGstSummary.igst + salesGstSummary.cgst + salesGstSummary.sgst)}
+                  </span>
+                </div>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">Standard Tax Slab</span>
+                  <span className="text-sm font-semibold text-gray-805 dark:text-zinc-300 block mt-1">
+                    {countryConfig.defaultTaxRate}% {countryConfig.taxName}
+                  </span>
+                </div>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">Applicable Currency</span>
+                  <span className="text-sm font-semibold text-gray-805 dark:text-zinc-300 block mt-1">
+                    {countryConfig.currencyCode} ({countryConfig.currencySymbol})
+                  </span>
+                </div>
+              </>
+            )}
           </div>
           <div className="pt-3 border-t border-gray-50 dark:border-zinc-800/45 flex justify-between text-xs">
             <span className="font-semibold text-gray-500">Gross Sales Value:</span>
@@ -1818,20 +1843,20 @@ export const ReportsView: React.FC = () => {
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 block mb-0.5">
-                  GSTR-2 Input Tax Credit Summary
+                  {countryConfig.code === 'IN' ? 'GSTR-2 Input Tax Credit Summary' : `${countryConfig.taxName} Input Tax Credit Summary`}
                 </span>
                 <h3 className="text-base font-black text-gray-950">
                   {activeCompany?.name || "Nirmal Hardware Store"}
                 </h3>
                 {activeCompany?.gstin && (
                   <p className="text-[10px] font-mono font-bold text-gray-800 mt-0.5">
-                    GSTIN: {activeCompany.gstin}
+                    {countryConfig.taxLabel}: {activeCompany.gstin}
                   </p>
                 )}
               </div>
               <div className="text-right text-[10px] text-gray-500">
-                <p className="font-bold">Period: {activeDateRange.start.toLocaleDateString('en-IN')} - {activeDateRange.end.toLocaleDateString('en-IN')}</p>
-                <p className="mt-0.5 text-[9px]">Generated: {new Date().toLocaleDateString('en-IN')}</p>
+                <p className="font-bold">Period: {activeDateRange.start.toLocaleDateString()} - {activeDateRange.end.toLocaleDateString()}</p>
+                <p className="mt-0.5 text-[9px]">Generated: {new Date().toLocaleDateString()}</p>
               </div>
             </div>
           </div>
@@ -1839,7 +1864,7 @@ export const ReportsView: React.FC = () => {
           <div className="flex justify-between items-center text-xs">
             <h4 id="rep-gstr2-title" className="font-semibold text-gray-800 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1">
               <FileCheck className="w-4 h-4 text-amber-500" />
-              GSTR-2 (Input Tax Credit / Purchases)
+              {countryConfig.code === 'IN' ? 'GSTR-2 (Input Tax Credit / Purchases)' : `${countryConfig.taxName} Input Tax Credit (Purchases)`}
             </h4>
             <div className="flex items-center gap-2 print:hidden">
               <button
@@ -1869,24 +1894,49 @@ export const ReportsView: React.FC = () => {
                 {formatCurrency(purchaseGstSummary.taxableAmount)}
               </span>
             </div>
-            <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
-              <span className="text-[10px] text-gray-400 font-bold uppercase block">ITC Claimable (IGST)</span>
-              <span className="text-sm font-extrabold text-orange-500 block mt-1">
-                {formatCurrency(purchaseGstSummary.igst)}
-              </span>
-            </div>
-            <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
-              <span className="text-[10px] text-gray-400 font-bold uppercase block">ITC Claimable ({countryConfig.stateTaxShorthand || 'CGST'})</span>
-              <span className="text-sm font-semibold text-gray-850 dark:text-zinc-300 block mt-1">
-                {formatCurrency(purchaseGstSummary.cgst)}
-              </span>
-            </div>
-            <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
-              <span className="text-[10px] text-gray-400 font-bold uppercase block">ITC Claimable ({countryConfig.stateTaxShorthand || 'SGST'})</span>
-              <span className="text-sm font-semibold text-gray-850 dark:text-zinc-300 block mt-1">
-                {formatCurrency(purchaseGstSummary.sgst)}
-              </span>
-            </div>
+            {countryConfig.taxSystem === 'dual_gst' ? (
+              <>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">ITC Claimable (IGST)</span>
+                  <span className="text-sm font-extrabold text-orange-500 block mt-1">
+                    {formatCurrency(purchaseGstSummary.igst)}
+                  </span>
+                </div>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">ITC Claimable (CGST)</span>
+                  <span className="text-sm font-semibold text-gray-850 dark:text-zinc-300 block mt-1">
+                    {formatCurrency(purchaseGstSummary.cgst)}
+                  </span>
+                </div>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">ITC Claimable (SGST)</span>
+                  <span className="text-sm font-semibold text-gray-850 dark:text-zinc-300 block mt-1">
+                    {formatCurrency(purchaseGstSummary.sgst)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">{countryConfig.taxName} Paid on Purchases</span>
+                  <span className="text-sm font-extrabold text-orange-500 block mt-1">
+                    {formatCurrency(purchaseGstSummary.igst + purchaseGstSummary.cgst + purchaseGstSummary.sgst)}
+                  </span>
+                </div>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">Net {countryConfig.taxName} Liability</span>
+                  <span className="text-sm font-extrabold text-emerald-600 block mt-1">
+                    {formatCurrency((salesGstSummary.igst + salesGstSummary.cgst + salesGstSummary.sgst) - (purchaseGstSummary.igst + purchaseGstSummary.cgst + purchaseGstSummary.sgst))}
+                  </span>
+                </div>
+                <div className="bg-gray-50/50 dark:bg-zinc-800/10 p-3 rounded-lg">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase block">ITC Mechanism</span>
+                  <span className="text-sm font-semibold text-gray-850 dark:text-zinc-300 block mt-1">
+                    Full Input Tax Credit Allowed
+                  </span>
+                </div>
+              </>
+            )}
           </div>
           <div className="pt-3 border-t border-gray-50 dark:border-zinc-800/45 flex justify-between text-xs">
             <span className="font-semibold text-gray-500">Gross Purchases:</span>
@@ -3021,18 +3071,27 @@ export const ReportsView: React.FC = () => {
                     <span>Taxable Subtotal:</span>
                     <span className="font-semibold text-gray-900 dark:text-white print:text-black">{formatCurrency(selectedInvoiceForModal.subTotal)}</span>
                   </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>{countryConfig.stateTaxShorthand || 'CGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.cgstTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>{countryConfig.stateTaxShorthand || 'SGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.sgstTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>{countryConfig.centralTaxShorthand || 'IGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.igstTotal)}</span>
-                  </div>
+                  {countryConfig.taxSystem === 'dual_gst' ? (
+                    <>
+                      <div className="flex justify-between text-gray-500">
+                        <span>CGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.cgstTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>SGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.sgstTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>IGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.igstTotal)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-gray-500">
+                      <span>{countryConfig.taxName}:</span>
+                      <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.igstTotal || (selectedInvoiceForModal.cgstTotal + selectedInvoiceForModal.sgstTotal))}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-gray-500">
                     <span>Discount:</span>
                     <span className="font-mono text-red-500">- {formatCurrency(selectedInvoiceForModal.discountTotal)}</span>
@@ -3215,18 +3274,27 @@ export const ReportsView: React.FC = () => {
                     <span>Taxable Subtotal:</span>
                     <span className="font-semibold text-gray-900 dark:text-white print:text-black">{formatCurrency(selectedPurchaseForModal.subTotal)}</span>
                   </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>{countryConfig.stateTaxShorthand || 'CGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.cgstTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>{countryConfig.stateTaxShorthand || 'SGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.sgstTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>{countryConfig.centralTaxShorthand || 'IGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.igstTotal)}</span>
-                  </div>
+                  {countryConfig.taxSystem === 'dual_gst' ? (
+                    <>
+                      <div className="flex justify-between text-gray-500">
+                        <span>CGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.cgstTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>SGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.sgstTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>IGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.igstTotal)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-gray-500">
+                      <span>{countryConfig.taxName}:</span>
+                      <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.igstTotal || (selectedPurchaseForModal.cgstTotal + selectedPurchaseForModal.sgstTotal))}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-gray-500">
                     <span>Discount:</span>
                     <span className="font-mono text-red-500">- {formatCurrency(selectedPurchaseForModal.discountTotal)}</span>

@@ -117,10 +117,16 @@ export const InventoryView: React.FC = () => {
   const [unit, setUnit] = useState<'PCS' | 'KG' | 'LITER' | 'BOX' | 'MTR' | 'SET'>('PCS');
   const [purchasePrice, setPurchasePrice] = useState(0);
   const [sellingPrice, setSellingPrice] = useState(0);
-  const [gstRate, setGstRate] = useState(18); // Default to standard 18%
+  const [gstRate, setGstRate] = useState(countryConfig.defaultTaxRate || 18);
   const [openingStock, setOpeningStock] = useState(0);
   const [currentStock, setCurrentStock] = useState(0);
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
+
+  React.useEffect(() => {
+    if (!editingProduct) {
+      setGstRate(countryConfig.defaultTaxRate || 18);
+    }
+  }, [countryConfig, editingProduct]);
 
   const categories = useMemo(() => {
     const list = new Set(products.map(p => p.category));
@@ -211,7 +217,7 @@ export const InventoryView: React.FC = () => {
     setUnit('PCS');
     setPurchasePrice(0);
     setSellingPrice(0);
-    setGstRate(18);
+    setGstRate(countryConfig.defaultTaxRate || 18);
     setOpeningStock(0);
     setCurrentStock(0);
     setLowStockThreshold(5);
@@ -393,14 +399,14 @@ export const InventoryView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">8-Digit HSN Code *</label>
+                <label className="block text-xs font-bold text-gray-500 mb-1">{countryConfig.hsnLabel} *</label>
                 <input
                   id="form-p-hsn"
                   type="text"
                   required
                   value={hsnCode}
                   onChange={(e) => setHsnCode(e.target.value)}
-                  placeholder="e.g. 74081190"
+                  placeholder={countryConfig.code === 'IN' ? "e.g. 74081190" : "e.g. HS-10029"}
                   className="w-full text-xs p-2.5 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-800 rounded-lg text-gray-900 dark:text-white font-mono"
                 />
               </div>
@@ -423,7 +429,7 @@ export const InventoryView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">PURCHASE PRICE (Rs) *</label>
+                <label className="block text-xs font-bold text-gray-500 mb-1">PURCHASE PRICE ({countryConfig.currencySymbol}) *</label>
                 <input
                   id="form-p-pprice"
                   type="number"
@@ -436,7 +442,7 @@ export const InventoryView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">SELLING PRICE (Rs) *</label>
+                <label className="block text-xs font-bold text-gray-500 mb-1">SELLING PRICE ({countryConfig.currencySymbol}) *</label>
                 <input
                   id="form-p-sprice"
                   type="number"
@@ -450,18 +456,38 @@ export const InventoryView: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">{countryConfig.taxName.toUpperCase()} COMPLIANCE RATE (%)</label>
-                <select
-                  id="sel-p-gst"
-                  value={gstRate}
-                  onChange={(e) => setGstRate(parseFloat(e.target.value) || 0)}
-                  className="w-full text-xs p-2.5 bg-gray-50 dark:bg-zinc-800 border border-gray-205 dark:border-zinc-800 rounded-lg text-gray-900 dark:text-white font-mono"
-                >
-                  {countryConfig.taxRates.map((rate) => (
-                    <option key={rate} value={rate}>
-                      {rate}% {rate === 0 ? '(Exempt)' : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    id="sel-p-gst"
+                    value={countryConfig.taxRates.includes(gstRate) ? gstRate : 'custom'}
+                    onChange={(e) => {
+                      if (e.target.value !== 'custom') {
+                        setGstRate(parseFloat(e.target.value) || 0);
+                      }
+                    }}
+                    className="flex-1 text-xs p-2.5 bg-gray-50 dark:bg-zinc-800 border border-gray-205 dark:border-zinc-800 rounded-lg text-gray-900 dark:text-white font-mono"
+                  >
+                    {countryConfig.taxRates.map((rate) => (
+                      <option key={rate} value={rate}>
+                        {rate}% {rate === 0 ? '(Exempt)' : ''}
+                      </option>
+                    ))}
+                    {!countryConfig.taxRates.includes(gstRate) && (
+                      <option value="custom">Custom ({gstRate}%)</option>
+                    )}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={gstRate}
+                    onChange={(e) => setGstRate(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="Rate %"
+                    title="Enter custom tax rate %"
+                    className="w-20 text-xs p-2.5 bg-gray-50 dark:bg-zinc-800 border border-gray-205 dark:border-zinc-800 rounded-lg text-gray-900 dark:text-white font-mono text-center font-bold"
+                  />
+                </div>
               </div>
 
               {!editingProduct && (

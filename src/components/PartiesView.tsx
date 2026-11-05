@@ -229,7 +229,7 @@ export const PartiesView: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
-  const [state, setState] = useState('Maharashtra');
+  const [state, setState] = useState(countryConfig.statesOrProvinces[0] || 'Maharashtra');
   const [gstType, setGstType] = useState<'GST_REGULAR' | 'GST_COMPOSITION' | 'CONSUMER' | 'UNREGISTERED'>('CONSUMER');
   const [gstin, setGstin] = useState('');
   const [openingBalance, setOpeningBalance] = useState(0);
@@ -497,12 +497,12 @@ export const PartiesView: React.FC = () => {
 
     doc.setFontSize(9);
     doc.setTextColor(30, 41, 59);
-    doc.text(`INR ${startingBalance.toFixed(2)}`, lMargin + 5, y + 11);
-    doc.text(`INR ${totalTransactionsInPeriodSum.toFixed(2)}`, lMargin + 50, y + 11);
-    doc.text(`INR ${totalPaymentsMadeInPeriodSum.toFixed(2)}`, lMargin + 95, y + 11);
+    doc.text(`${countryConfig.currencyCode} ${startingBalance.toFixed(2)}`, lMargin + 5, y + 11);
+    doc.text(`${countryConfig.currencyCode} ${totalTransactionsInPeriodSum.toFixed(2)}`, lMargin + 50, y + 11);
+    doc.text(`${countryConfig.currencyCode} ${totalPaymentsMadeInPeriodSum.toFixed(2)}`, lMargin + 95, y + 11);
     
     doc.setTextColor(partyType === 'SUPPLIER' ? 220 : 15, partyType === 'SUPPLIER' ? 38 : 116, partyType === 'SUPPLIER' ? 38 : 59); // Color highlights
-    doc.text(`INR ${currentOutstandingDebt.toFixed(2)}`, lMargin + 138, y + 11);
+    doc.text(`${countryConfig.currencyCode} ${currentOutstandingDebt.toFixed(2)}`, lMargin + 138, y + 11);
 
     y += 22;
 
@@ -517,7 +517,7 @@ export const PartiesView: React.FC = () => {
     doc.text('Reference No', lMargin + 55, y + 5);
     doc.text(partyType === 'SUPPLIER' ? 'Debit (Payment)' : 'Credit (Cleared)', lMargin + 95, y + 5);
     doc.text(partyType === 'SUPPLIER' ? 'Credit (Bills)' : 'Debit (Invoices)', lMargin + 125, y + 5);
-    doc.text('Outstanding (INR)', lMargin + 155, y + 5);
+    doc.text(`Outstanding (${countryConfig.currencyCode})`, lMargin + 155, y + 5);
 
     y += 7;
     doc.setFont('helvetica', 'normal');
@@ -687,7 +687,7 @@ export const PartiesView: React.FC = () => {
     doc.text('Disc', lMargin + 115, y + 5);
     doc.text('GST Rate', lMargin + 130, y + 5);
     doc.text('Tax Val', lMargin + 152, y + 5);
-    doc.text('Total (Rs)', lMargin + 168, y + 5);
+    doc.text(`Total (${countryConfig.currencySymbol})`, lMargin + 168, y + 5);
 
     y += 7;
     doc.setFont('helvetica', 'normal');
@@ -738,15 +738,15 @@ export const PartiesView: React.FC = () => {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`INR ${invData.subTotal.toFixed(2)}`, 165, y + 5);
-    doc.text(`INR ${invData.cgstTotal.toFixed(2)}`, 165, y + 10);
-    doc.text(`INR ${invData.sgstTotal.toFixed(2)}`, 165, y + 15);
-    doc.text(`INR ${invData.igstTotal.toFixed(2)}`, 165, y + 20);
-    doc.text(`INR ${invData.discountTotal.toFixed(2)}`, 165, y + 25);
+    doc.text(`${countryConfig.currencyCode} ${invData.subTotal.toFixed(2)}`, 165, y + 5);
+    doc.text(`${countryConfig.currencyCode} ${invData.cgstTotal.toFixed(2)}`, 165, y + 10);
+    doc.text(`${countryConfig.currencyCode} ${invData.sgstTotal.toFixed(2)}`, 165, y + 15);
+    doc.text(`${countryConfig.currencyCode} ${invData.igstTotal.toFixed(2)}`, 165, y + 20);
+    doc.text(`${countryConfig.currencyCode} ${invData.discountTotal.toFixed(2)}`, 165, y + 25);
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text(`INR ${invData.grandTotal.toFixed(2)}`, 165, y + 32);
+    doc.text(`${countryConfig.currencyCode} ${invData.grandTotal.toFixed(2)}`, 165, y + 32);
 
     y += 42;
 
@@ -840,7 +840,7 @@ export const PartiesView: React.FC = () => {
     doc.text('Disc', lMargin + 115, y + 5);
     doc.text('GST Rate', lMargin + 130, y + 5);
     doc.text('Tax Val', lMargin + 152, y + 5);
-    doc.text('Total (Rs)', lMargin + 168, y + 5);
+    doc.text(`Total (${countryConfig.currencySymbol})`, lMargin + 168, y + 5);
 
     y += 7;
     doc.setFont('helvetica', 'normal');
@@ -886,15 +886,15 @@ export const PartiesView: React.FC = () => {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`INR ${purData.subTotal.toFixed(2)}`, 165, y + 5);
-    doc.text(`INR ${purData.cgstTotal.toFixed(2)}`, 165, y + 10);
-    doc.text(`INR ${purData.sgstTotal.toFixed(2)}`, 165, y + 15);
-    doc.text(`INR ${purData.igstTotal.toFixed(2)}`, 165, y + 20);
-    doc.text(`INR ${purData.discountTotal.toFixed(2)}`, 165, y + 25);
+    doc.text(`${countryConfig.currencyCode} ${purData.subTotal.toFixed(2)}`, 165, y + 5);
+    doc.text(`${countryConfig.currencyCode} ${purData.cgstTotal.toFixed(2)}`, 165, y + 10);
+    doc.text(`${countryConfig.currencyCode} ${purData.sgstTotal.toFixed(2)}`, 165, y + 15);
+    doc.text(`${countryConfig.currencyCode} ${purData.igstTotal.toFixed(2)}`, 165, y + 20);
+    doc.text(`${countryConfig.currencyCode} ${purData.discountTotal.toFixed(2)}`, 165, y + 25);
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text(`INR ${purData.grandTotal.toFixed(2)}`, 165, y + 32);
+    doc.text(`${countryConfig.currencyCode} ${purData.grandTotal.toFixed(2)}`, 165, y + 32);
 
     y += 42;
 
@@ -1099,7 +1099,7 @@ export const PartiesView: React.FC = () => {
     setPhone('');
     setEmail('');
     setAddress('');
-    setState('Maharashtra');
+    setState(countryConfig.statesOrProvinces[0] || 'Maharashtra');
     setGstType('CONSUMER');
     setGstin('');
     setOpeningBalance(0);
@@ -1399,60 +1399,51 @@ export const PartiesView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">STATE / UT OF SUPPLY</label>
+                <label className="block text-xs font-bold text-gray-500 mb-1">STATE / PROVINCE</label>
                 <select
                   id="form-p-state"
                   value={state}
                   onChange={(e) => setState(e.target.value)}
                   className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800 border border-gray-205 dark:border-zinc-800 text-xs rounded-lg text-gray-900 dark:text-white"
                 >
-                  {statesOfIndia.map((s, idx) => <option key={idx} value={s}>{s}</option>)}
+                  {countryConfig.statesOrProvinces.map((s, idx) => <option key={idx} value={s}>{s}</option>)}
                 </select>
               </div>
 
               {activeTab === 'CUSTOMERS' && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">GST REGISTRY CLASSIFICATION</label>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">{countryConfig.taxName.toUpperCase()} REGISTRY STATUS</label>
                   <select
                     id="form-p-gsttype"
                     value={gstType}
                     onChange={(e: any) => setGstType(e.target.value)}
                     className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800 border border-gray-205 dark:border-zinc-800 text-xs rounded-lg text-gray-900 dark:text-white"
                   >
-                    <option value="CONSUMER">Consumer (B2C)</option>
-                    <option value="GST_REGULAR">Regular GST Registered (B2B)</option>
-                    <option value="GST_COMPOSITION">Composition Taxpayer</option>
-                    <option value="UNREGISTERED">Unregistered Business (B2C Large)</option>
+                    {countryConfig.taxTypeOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                 </div>
               )}
 
               {(activeTab === 'SUPPLIERS' || gstType !== 'CONSUMER') && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">15-Digit GSTIN Number</label>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">{countryConfig.taxLabel}</label>
                   <input
                     id="form-p-gstin"
                     type="text"
                     value={gstin}
                     onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                    placeholder="24AAAAP1234A1Z1"
+                    placeholder={countryConfig.taxLabelPlaceholder}
                     className={`w-full p-2.5 bg-gray-50 dark:bg-zinc-800 border rounded-lg text-xs font-mono font-bold focus:outline-none ${
                       gstin
-                        ? /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin)
-                          ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500'
-                          : 'border-yellow-500 text-yellow-600 focus:border-yellow-500'
+                        ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500'
                         : 'border-gray-205 dark:border-zinc-800 text-blue-600 focus:border-indigo-500'
                     }`}
                   />
-                  {gstin && (
-                    <p className="text-[10px] mt-1 font-sans">
-                      {/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin) ? (
-                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">✓ Valid Indian GSTIN format standard</span>
-                      ) : (
-                        <span className="text-yellow-600 dark:text-yellow-500 font-semibold">⚠ Expected 15-digit layout: State(2) + PAN(10) + Entity(1) + Z(1) + Checksum(1)</span>
-                      )}
-                    </p>
-                  )}
+                  <p className="text-[10px] mt-1 text-gray-500 font-sans">
+                    {countryConfig.taxFormatLabel}
+                  </p>
                 </div>
               )}
 
@@ -3018,18 +3009,27 @@ export const PartiesView: React.FC = () => {
                     <span>Taxable Subtotal:</span>
                     <span className="font-semibold text-gray-900 dark:text-white print:text-black">{formatCurrency(selectedInvoiceForModal.subTotal)}</span>
                   </div>
-                  <div className="flex justify-between text-gray-505">
-                    <span>{countryConfig.stateTaxShorthand || 'CGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.cgstTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-505">
-                    <span>{countryConfig.stateTaxShorthand || 'SGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.sgstTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-505">
-                    <span>{countryConfig.centralTaxShorthand || 'IGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.igstTotal)}</span>
-                  </div>
+                  {countryConfig.taxSystem === 'dual_gst' ? (
+                    <>
+                      <div className="flex justify-between text-gray-505">
+                        <span>CGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.cgstTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-505">
+                        <span>SGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.sgstTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-505">
+                        <span>IGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.igstTotal)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-gray-505">
+                      <span>{countryConfig.taxName}:</span>
+                      <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedInvoiceForModal.igstTotal || (selectedInvoiceForModal.cgstTotal + selectedInvoiceForModal.sgstTotal))}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-gray-505">
                     <span>Discount:</span>
                     <span className="font-mono text-red-500">- {formatCurrency(selectedInvoiceForModal.discountTotal)}</span>
@@ -3212,18 +3212,27 @@ export const PartiesView: React.FC = () => {
                     <span>Taxable Subtotal:</span>
                     <span className="font-semibold text-gray-900 dark:text-white print:text-black">{formatCurrency(selectedPurchaseForModal.subTotal)}</span>
                   </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>{countryConfig.stateTaxShorthand || 'CGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.cgstTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>{countryConfig.stateTaxShorthand || 'SGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.sgstTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>{countryConfig.centralTaxShorthand || 'IGST'}:</span>
-                    <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.igstTotal)}</span>
-                  </div>
+                  {countryConfig.taxSystem === 'dual_gst' ? (
+                    <>
+                      <div className="flex justify-between text-gray-500">
+                        <span>CGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.cgstTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>SGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.sgstTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-500">
+                        <span>IGST:</span>
+                        <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.igstTotal)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-gray-500">
+                      <span>{countryConfig.taxName}:</span>
+                      <span className="font-mono text-gray-800 dark:text-zinc-300 print:text-black">{formatCurrency(selectedPurchaseForModal.igstTotal || (selectedPurchaseForModal.cgstTotal + selectedPurchaseForModal.sgstTotal))}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-gray-500">
                     <span>Discount:</span>
                     <span className="font-mono text-red-500">- {formatCurrency(selectedPurchaseForModal.discountTotal)}</span>
