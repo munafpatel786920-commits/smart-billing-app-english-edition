@@ -239,6 +239,12 @@ export const PurchaseBillingView: React.FC = () => {
     setItems(copy);
   };
 
+  const handleUpdateItemTaxRate = (index: number, val: number) => {
+    const copy = [...items];
+    copy[index].gstRate = Math.max(0, val);
+    setItems(copy);
+  };
+
   const handleRemoveItem = (index: number) => {
     setItems(items.filter((_, idx) => idx !== index));
   };
@@ -925,8 +931,21 @@ export const PurchaseBillingView: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="py-2 px-3 border-r border-gray-150 dark:border-zinc-800/50 text-center font-bold font-mono text-gray-800 dark:text-zinc-200 font-bold">
-                      {item.gstRate}%
+                    <td className="py-2 px-3 border-r border-gray-150 dark:border-zinc-800/50 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <input
+                          id={`inp-purchase-grid-tax-${idx}`}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={item.gstRate}
+                          onChange={(e: any) => handleUpdateItemTaxRate(idx, Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-16 p-1 border border-gray-200 dark:border-zinc-750 dark:bg-zinc-900 rounded text-xs font-bold font-mono text-center focus:border-blue-500 focus:outline-hidden"
+                          title={`Enter manual ${countryConfig.taxName} rate %`}
+                        />
+                        <span className="text-[11px] font-bold text-gray-500">%</span>
+                      </div>
                     </td>
                     <td className="py-2 px-3 border-r border-gray-150 dark:border-zinc-800/50 text-right font-black font-mono text-[11px] text-gray-905 dark:text-zinc-100">
                       {formatCurrency(totals.items[idx]?.total ?? 0)}

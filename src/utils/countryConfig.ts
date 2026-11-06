@@ -334,23 +334,24 @@ export function getCountryConfig(
   const code = (countryCode || 'IN').toUpperCase() as CountryCode;
   const base = (code in COUNTRIES) ? COUNTRIES[code] : COUNTRIES.IN;
 
-  if (enableManual) {
-    const customRates = (customRatesMap && customRatesMap[code] && Array.isArray(customRatesMap[code]) && customRatesMap[code]!.length > 0)
-      ? [...customRatesMap[code]!].sort((a, b) => a - b)
-      : [...base.taxRates];
+  const defaultRate = (customDefaultRates && customDefaultRates[code] !== undefined)
+    ? Number(customDefaultRates[code])
+    : base.defaultTaxRate;
 
-    const defaultRate = (customDefaultRates && customDefaultRates[code] !== undefined)
-      ? Number(customDefaultRates[code])
-      : (customRates.includes(base.defaultTaxRate) ? base.defaultTaxRate : customRates[0]);
+  const customRates = (customRatesMap && customRatesMap[code] && Array.isArray(customRatesMap[code]) && customRatesMap[code]!.length > 0)
+    ? [...customRatesMap[code]!].sort((a, b) => a - b)
+    : [...base.taxRates];
 
-    return {
-      ...base,
-      taxRates: customRates,
-      defaultTaxRate: defaultRate
-    };
+  if (!customRates.includes(defaultRate)) {
+    customRates.push(defaultRate);
+    customRates.sort((a, b) => a - b);
   }
 
-  return base;
+  return {
+    ...base,
+    taxRates: customRates,
+    defaultTaxRate: defaultRate
+  };
 }
 
 export function formatCurrencyValue(value: number, countryCode?: string): string {

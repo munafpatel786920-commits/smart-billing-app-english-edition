@@ -1246,19 +1246,20 @@ export const SalesBillingView: React.FC = () => {
                       )}
                     </td>
                     <td className="py-2 px-3 border-r border-gray-150 dark:border-zinc-800/50 text-center">
-                      <select
-                        value={item.gstRate}
-                        onChange={(e) => handleUpdateItemTaxRate(idx, parseFloat(e.target.value) || 0)}
-                        className="p-1 text-center font-mono font-bold text-xs bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-750 rounded focus:border-blue-500"
-                        title="Change line tax rate"
-                      >
-                        {countryConfig.taxRates.map((r) => (
-                          <option key={r} value={r}>{r}%</option>
-                        ))}
-                        {!countryConfig.taxRates.includes(item.gstRate) && (
-                          <option value={item.gstRate}>{item.gstRate}%</option>
-                        )}
-                      </select>
+                      <div className="flex items-center justify-center gap-1">
+                        <input
+                          id={`inp-grid-taxrate-${idx}`}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={item.gstRate}
+                          onChange={(e: any) => handleUpdateItemTaxRate(idx, Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-16 p-1 border border-gray-200 dark:border-zinc-750 dark:bg-zinc-900 rounded text-xs font-bold font-mono text-center focus:border-blue-500 focus:outline-hidden"
+                          title={`Enter manual ${countryConfig.taxName} rate %`}
+                        />
+                        <span className="text-[11px] font-bold text-gray-500">%</span>
+                      </div>
                     </td>
                     <td className="py-2 px-3 border-r border-gray-150 dark:border-zinc-800/50 text-right font-black font-mono text-[11px] text-gray-905 dark:text-zinc-100">
                       {formatCurrency(totals.items[idx]?.total ?? 0)}
