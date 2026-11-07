@@ -239,35 +239,47 @@ export const PartiesView: React.FC = () => {
 
   // Computed filters for the Credit Balance Sheet Tab
   const filteredCustomersCredit = useMemo(() => {
-    return customers.filter(c => {
-      const matchSearch = c.name.toLowerCase().includes(creditSearchQuery.toLowerCase()) || 
-                          (c.phone && c.phone.includes(creditSearchQuery)) || 
-                          (c.state && c.state.toLowerCase().includes(creditSearchQuery.toLowerCase()));
+    return (customers || []).filter(c => {
+      if (!c) return false;
+      const cName = c.name || '';
+      const cPhone = c.phone || '';
+      const cState = c.state || '';
+      const query = (creditSearchQuery || '').toLowerCase().trim();
+      const matchSearch = !query || 
+                          cName.toLowerCase().includes(query) || 
+                          cPhone.includes(query) || 
+                          cState.toLowerCase().includes(query);
       if (!matchSearch) return false;
-      if (creditFilterMode === 'OWED') return c.outstandingBalance > 0;
-      if (creditFilterMode === 'ZERO') return c.outstandingBalance === 0;
+      if (creditFilterMode === 'OWED') return (c.outstandingBalance || 0) > 0;
+      if (creditFilterMode === 'ZERO') return (c.outstandingBalance || 0) === 0;
       return true;
     });
   }, [customers, creditSearchQuery, creditFilterMode]);
 
   const filteredSuppliersCredit = useMemo(() => {
-    return suppliers.filter(s => {
-      const matchSearch = s.name.toLowerCase().includes(creditSearchQuery.toLowerCase()) ||
-                          (s.phone && s.phone.includes(creditSearchQuery)) ||
-                          (s.state && s.state.toLowerCase().includes(creditSearchQuery.toLowerCase()));
+    return (suppliers || []).filter(s => {
+      if (!s) return false;
+      const sName = s.name || '';
+      const sPhone = s.phone || '';
+      const sState = s.state || '';
+      const query = (creditSearchQuery || '').toLowerCase().trim();
+      const matchSearch = !query ||
+                          sName.toLowerCase().includes(query) ||
+                          sPhone.includes(query) ||
+                          sState.toLowerCase().includes(query);
       if (!matchSearch) return false;
-      if (creditFilterMode === 'OWED') return s.outstandingBalance > 0;
-      if (creditFilterMode === 'ZERO') return s.outstandingBalance === 0;
+      if (creditFilterMode === 'OWED') return (s.outstandingBalance || 0) > 0;
+      if (creditFilterMode === 'ZERO') return (s.outstandingBalance || 0) === 0;
       return true;
     });
   }, [suppliers, creditSearchQuery, creditFilterMode]);
 
   const totalCustomerReceivableSum = useMemo(() => {
-    return customers.reduce((sum, c) => sum + (c.outstandingBalance > 0 ? c.outstandingBalance : 0), 0);
+    return (customers || []).reduce((sum, c) => sum + ((c && c.outstandingBalance > 0) ? c.outstandingBalance : 0), 0);
   }, [customers]);
 
   const totalSupplierPayableSum = useMemo(() => {
-    return suppliers.reduce((sum, s) => sum + (s.outstandingBalance > 0 ? s.outstandingBalance : 0), 0);
+    return (suppliers || []).reduce((sum, s) => sum + ((s && s.outstandingBalance > 0) ? s.outstandingBalance : 0), 0);
   }, [suppliers]);
 
   // Party credit ledger statement state
@@ -594,7 +606,7 @@ export const PartiesView: React.FC = () => {
     doc.setFont('helvetica', 'normal');
     doc.text('Authorized Signatory', 145, y + 18);
 
-    doc.save(`${partyType}_Statement_${party.name.replace(/\s+/g, '_')}_${new Date().toISOString().substring(0,10)}.pdf`);
+    doc.save(`${partyType}_Statement_${(party?.name || 'Party').replace(/\s+/g, '_')}_${new Date().toISOString().substring(0,10)}.pdf`);
   };
 
   const downloadSalesInvoicePDF = (invData: any) => {
@@ -998,7 +1010,7 @@ export const PartiesView: React.FC = () => {
     doc.setFontSize(10);
     doc.text('Mode:', lMargin + 100, y + 12);
     doc.setFont('helvetica', 'bold');
-    doc.text(tx.paymentMode.replace('_', ' '), lMargin + 115, y + 12);
+    doc.text((tx.paymentMode || 'CASH').replace(/_/g, ' '), lMargin + 115, y + 12);
 
     doc.setFont('helvetica', 'normal');
     doc.text('Description:', lMargin + 5, y + 34);
@@ -1521,7 +1533,7 @@ export const PartiesView: React.FC = () => {
                       <td className="py-3.5 px-4">
                         <span className="font-extrabold text-[13px] text-gray-900 dark:text-white block">{c.name}</span>
                         <span className="bg-blue-50 dark:bg-blue-900/10 text-blue-600 px-1 py-0.5 rounded text-[8px] mt-1 inline-block uppercase font-black">
-                          {c.gstType.replace('_', ' ')}
+                          {(c.gstType || 'CONSUMER').replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 space-y-0.5">
@@ -3366,7 +3378,7 @@ export const PartiesView: React.FC = () => {
 
                   <div className="flex items-center border-b border-gray-100 pb-4 bg-gray-50/50 p-4 rounded-xl">
                     <span className="w-40 text-gray-400 font-bold uppercase text-[10px] tracking-wider">Payment Mode :</span>
-                    <span className="flex-1 font-black text-blue-600 uppercase tracking-widest">{selectedTxForReceipt.paymentMode.replace('_', ' ')}</span>
+                    <span className="flex-1 font-black text-blue-600 uppercase tracking-widest">{(selectedTxForReceipt.paymentMode || 'CASH').replace(/_/g, ' ')}</span>
                   </div>
 
                   <div className="flex border-b border-gray-100 pb-4">

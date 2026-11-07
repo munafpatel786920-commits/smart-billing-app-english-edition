@@ -135,12 +135,19 @@ export const InventoryView: React.FC = () => {
 
   // Filtering products
   const filteredProducts = useMemo(() => {
-    return products.filter(p => {
-      const matchesSearch = 
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.hsnCode.includes(searchQuery) ||
-        p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.barcode && p.barcode.includes(searchQuery));
+    return (products || []).filter(p => {
+      if (!p) return false;
+      const q = (searchQuery || '').toLowerCase().trim();
+      const pName = (p.name || '').toLowerCase();
+      const pSku = (p.sku || '').toLowerCase();
+      const pHsn = p.hsnCode || '';
+      const pBarcode = p.barcode || '';
+
+      const matchesSearch = !q ||
+        pName.includes(q) ||
+        pHsn.includes(q) ||
+        pSku.includes(q) ||
+        pBarcode.includes(q);
 
       const matchesCat = selectedCategory === 'ALL' || p.category === selectedCategory;
 

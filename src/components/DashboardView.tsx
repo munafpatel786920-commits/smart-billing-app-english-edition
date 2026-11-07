@@ -862,7 +862,7 @@ export const DashboardView: React.FC = () => {
                           {tx.type === 'PAYMENT_RECEIVED' && <ArrowUpRight className="w-3 h-3" />}
                           {tx.type === 'PURCHASE' && <ArrowDownLeft className="w-3 h-3" />}
                           {tx.type === 'PAYMENT_MADE' && <ArrowDownLeft className="w-3 h-3" />}
-                          {tx.type.replace('_', ' ')}
+                          {(tx.type || 'TX').replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td className="py-3 px-3 text-right font-bold text-gray-900 dark:text-white">

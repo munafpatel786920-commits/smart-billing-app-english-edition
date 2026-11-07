@@ -78,10 +78,13 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onOpenApp }) => 
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editName, setEditName] = useState("");
 
-  const filteredUsers = users.filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
-      u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.userId.toLowerCase().includes(userSearch.toLowerCase());
+  const filteredUsers = (users || []).filter(u => {
+    if (!u) return false;
+    const q = (userSearch || '').toLowerCase().trim();
+    const uName = (u.name || '').toLowerCase();
+    const uEmail = (u.email || '').toLowerCase();
+    const uId = (u.userId || '').toLowerCase();
+    const matchesSearch = !q || uName.includes(q) || uEmail.includes(q) || uId.includes(q);
     
     if (!matchesSearch) return false;
     if (statusFilter === 'ACTIVE') return u.status !== 'SUSPENDED';
@@ -89,11 +92,14 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onOpenApp }) => 
     return true;
   });
 
-  const filteredCompanies = companies.filter(c => 
-    c.name.toLowerCase().includes(companySearch.toLowerCase()) || 
-    (c.gstin || "").toLowerCase().includes(companySearch.toLowerCase()) ||
-    c.companyId.toLowerCase().includes(companySearch.toLowerCase())
-  );
+  const filteredCompanies = (companies || []).filter(c => {
+    if (!c) return false;
+    const q = (companySearch || '').toLowerCase().trim();
+    const cName = (c.name || '').toLowerCase();
+    const cGstin = (c.gstin || '').toLowerCase();
+    const cId = (c.companyId || '').toLowerCase();
+    return !q || cName.includes(q) || cGstin.includes(q) || cId.includes(q);
+  });
 
   const stats = {
     totalUsers: users.length,

@@ -23,9 +23,10 @@ import {
   Filter,
   DollarSign,
   X,
-  Check
+  Check,
+  PackagePlus
 } from 'lucide-react';
-import { PurchaseItem, PurchaseBill, Supplier } from '../types';
+import { PurchaseItem, PurchaseBill, Supplier, Product } from '../types';
 
 export const PurchaseBillingView: React.FC = () => {
   const { 
@@ -38,6 +39,7 @@ export const PurchaseBillingView: React.FC = () => {
     deletePurchaseEntry,
     savePurchaseReturn,
     saveSupplier,
+    saveProduct,
     formatCurrency,
     countryConfig,
     t 
@@ -74,6 +76,20 @@ export const PurchaseBillingView: React.FC = () => {
   const [suppState, setSuppState] = useState(activeCompany?.state || 'Maharashtra');
   const [suppGstin, setSuppGstin] = useState('');
 
+  // New Product Modal State (From Purchase Grid Table)
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [newProdName, setNewProdName] = useState('');
+  const [newProdCategory, setNewProdCategory] = useState('General');
+  const [newProdHsn, setNewProdHsn] = useState('');
+  const [newProdUnit, setNewProdUnit] = useState<'PCS' | 'KG' | 'LITER' | 'BOX' | 'MTR' | 'SET'>('PCS');
+  const [newProdPurchasePrice, setNewProdPurchasePrice] = useState<string>('');
+  const [newProdSellingPrice, setNewProdSellingPrice] = useState<string>('');
+  const [newProdTaxRate, setNewProdTaxRate] = useState<number>(countryConfig.defaultTaxRate ?? 18);
+  const [newProdOpeningStock, setNewProdOpeningStock] = useState<string>('0');
+  const [newProdSku, setNewProdSku] = useState('');
+  const [prodFormError, setProdFormError] = useState('');
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+
   const activeSupplier = useMemo(() => {
     return suppliers.find(s => s.supplierId === selectedSupplierId);
   }, [suppliers, selectedSupplierId]);
@@ -81,8 +97,10 @@ export const PurchaseBillingView: React.FC = () => {
   // Check GST calculations
   const isInterstate = useMemo(() => {
     if (!activeCompany || !activeSupplier) return false;
-    return activeCompany.address?.toLowerCase().includes(activeSupplier.state.toLowerCase()) === false &&
-           (activeCompany.state?.toLowerCase() !== activeSupplier.state?.toLowerCase());
+    const suppState = (activeSupplier.state || '').toLowerCase();
+    const compAddress = (activeCompany.address || '').toLowerCase();
+    const compState = (activeCompany.state || '').toLowerCase();
+    return compAddress.includes(suppState) === false && (compState !== suppState);
   }, [activeCompany, activeSupplier]);
 
   // Totals calculations
@@ -169,6 +187,85 @@ export const PurchaseBillingView: React.FC = () => {
       grandTotal
     };
   }, [items, isInterstate, countryConfig]);
+
+  // Product creation directly from Purchase Grid Table
+  const handleOpenNewProductModal = () => {
+    setNewProdName('');
+    setNewProdCategory('General');
+    setNewProdHsn('');
+    setNewProdUnit('PCS');
+    setNewProdPurchasePrice('');
+    setNewProdSellingPrice('');
+    setNewProdTaxRate(countryConfig.defaultTaxRate ?? 18);
+    setNewProdOpeningStock('0');
+    setNewProdSku(`SKU-${Math.floor(1000 + Math.random() * 9000)}`);
+    setProdFormError('');
+    setShowAddProductModal(true);
+  };
+
+  const handleCreateAndAddProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProdName.trim()) {
+      setProdFormError('Please enter a product name');
+      return;
+    }
+
+    const pPrice = parseFloat(newProdPurchasePrice) || 0;
+    const sPrice = parseFloat(newProdSellingPrice) || 0;
+    const stockQty = Math.max(0, parseFloat(newProdOpeningStock) || 0);
+    const taxRate = parseFloat(newProdTaxRate as any) || 0;
+    const newId = 'prod_' + Date.now();
+    const generatedSku = newProdSku.trim() || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+    const hsnVal = newProdHsn.trim() || '9999';
+
+    setIsSavingProduct(true);
+    setProdFormError('');
+
+    try {
+      const newProduct: Product = {
+        productId: newId,
+        name: newProdName.trim(),
+        category: newProdCategory.trim() || 'General',
+        sku: generatedSku,
+        hsnCode: hsnVal,
+        unit: newProdUnit,
+        purchasePrice: pPrice,
+        sellingPrice: sPrice,
+        gstRate: taxRate,
+        openingStock: stockQty,
+        currentStock: stockQty,
+        lowStockThreshold: 5,
+      };
+
+      await saveProduct(newProduct);
+
+      // Immediately append as line item into current purchase bill items
+      setItems(prev => [
+        ...prev,
+        {
+          productId: newId,
+          name: newProduct.name,
+          hsnCode: newProduct.hsnCode,
+          qty: 1,
+          unit: newProduct.unit,
+          price: newProduct.purchasePrice,
+          discount: 0,
+          discountPercent: 0,
+          discountType: 'FLAT',
+          gstRate: newProduct.gstRate,
+          cgst: 0,
+          sgst: 0,
+          igst: 0
+        }
+      ]);
+
+      setShowAddProductModal(false);
+    } catch (err: any) {
+      setProdFormError(err.message || 'Failed to save product');
+    } finally {
+      setIsSavingProduct(false);
+    }
+  };
 
   const handleAddItem = (productId: string) => {
     const prod = products.find(p => p.productId === productId);
@@ -822,36 +919,85 @@ export const PurchaseBillingView: React.FC = () => {
 
       {/* Product rows adding */}
       <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm space-y-4">
-        <h4 id="purchase-item-title" className="text-sm font-semibold text-gray-800 dark:text-zinc-200 uppercase tracking-wide">
-          Products Bought Inflow List
-        </h4>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-gray-100 dark:border-zinc-800">
+          <div>
+            <h4 id="purchase-item-title" className="text-sm font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wide flex items-center gap-2">
+              <span>Purchase Inward Grid Table</span>
+              <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold px-2 py-0.5 rounded-full lowercase">
+                {items.length} {items.length === 1 ? 'item' : 'items'}
+              </span>
+            </h4>
+            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+              Select existing inventory items or create a new product directly from this purchase grid.
+            </p>
+          </div>
+          <button
+            type="button"
+            id="btn-purchase-create-new-product"
+            onClick={handleOpenNewProductModal}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all hover:cursor-pointer shrink-0"
+            title="Create a new product right from this purchase grid table"
+          >
+            <PackagePlus className="w-4 h-4" />
+            <span>+ Create New Product</span>
+          </button>
+        </div>
 
         {/* Product append select */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <select
-            id="sel-purchase-add-product"
-            defaultValue=""
-            onChange={(e) => {
-              if (e.target.value) {
-                handleAddItem(e.target.value);
-                e.target.value = '';
-              }
-            }}
-            className="text-xs p-2.5 bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-zinc-300 rounded-xl"
-          >
-            <option value="">➕ Select Material/Product to Stock-In...</option>
-            {products.map((p, idx) => (
-              <option key={idx} value={p.productId}>
-                {p.name} - SKU: {p.sku} (Current Stock: {p.currentStock})
+        <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+          <div className="flex-1">
+            <select
+              id="sel-purchase-add-product"
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value === '__CREATE_NEW__') {
+                  handleOpenNewProductModal();
+                  e.target.value = '';
+                  return;
+                }
+                if (e.target.value) {
+                  handleAddItem(e.target.value);
+                  e.target.value = '';
+                }
+              }}
+              className="w-full text-xs p-2.5 bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-zinc-300 rounded-xl font-medium focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">➕ Select Material/Product to Stock-In...</option>
+              <option value="__CREATE_NEW__" className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40">
+                ✨ ➕ [Create New Product & Stock-In to Grid]
               </option>
-            ))}
-          </select>
+              {products.map((p, idx) => (
+                <option key={idx} value={p.productId}>
+                  {p.name} - SKU: {p.sku} ({countryConfig.hsnLabel}: {p.hsnCode}) | Stock: {p.currentStock} {p.unit || 'Units'}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={handleOpenNewProductModal}
+            className="px-3.5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-800 dark:text-zinc-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap hover:cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Quick Create Item</span>
+          </button>
         </div>
 
         {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400 text-xs border-2 border-dashed border-gray-150 rounded-2xl">
-            <ShoppingBag className="w-10 h-10 text-gray-300 stroke-1 mb-2" />
-            No purchase products selected yet.
+          <div className="flex flex-col items-center justify-center py-14 text-gray-400 text-xs border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-2xl p-6 text-center">
+            <ShoppingBag className="w-10 h-10 text-gray-300 dark:text-zinc-600 stroke-1 mb-2" />
+            <p className="font-bold text-gray-700 dark:text-zinc-200 text-sm mb-1">No purchase products selected yet</p>
+            <p className="text-gray-500 dark:text-zinc-400 mb-4 max-w-sm">
+              Choose an existing item from inventory or create a new product to purchase directly.
+            </p>
+            <button
+              type="button"
+              onClick={handleOpenNewProductModal}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors hover:cursor-pointer"
+            >
+              <PackagePlus className="w-4 h-4" />
+              <span>Create New Product for Purchase</span>
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto text-xs">
@@ -963,6 +1109,21 @@ export const PurchaseBillingView: React.FC = () => {
                 ))}
               </tbody>
             </table>
+
+            {/* Quick action bar below table */}
+            <div className="mt-3 pt-3 border-t border-gray-150 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] text-gray-500 dark:text-zinc-400 font-medium">
+                {items.length} line item{items.length > 1 ? 's' : ''} in purchase bill
+              </span>
+              <button
+                type="button"
+                onClick={handleOpenNewProductModal}
+                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800 transition-colors hover:cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Create & Stock-In Another Product</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -1205,6 +1366,246 @@ export const PurchaseBillingView: React.FC = () => {
                   <span>Confirm & Save Payment</span>
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* CREATE NEW PRODUCT MODAL (From Purchase Grid Table) */}
+      {/* ------------------------------------------------------------- */}
+      {showAddProductModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-2xl shadow-2xl border border-gray-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[92vh]">
+            
+            {/* Header */}
+            <div className="p-4 px-6 border-b border-gray-100 dark:border-zinc-800 flex items-center justify-between bg-gray-50 dark:bg-zinc-850">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                  <PackagePlus className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                    Create New Product (Purchase Grid Table)
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    Saves to inventory master and adds immediately as an active row in this purchase bill.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddProductModal(false)}
+                className="p-1.5 hover:bg-gray-200 dark:hover:bg-zinc-800 rounded-lg text-gray-500 hover:cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleCreateAndAddProduct} className="p-6 overflow-y-auto space-y-4 text-xs">
+              {prodFormError && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl font-medium">
+                  {prodFormError}
+                </div>
+              )}
+
+              {/* Product Name */}
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 dark:text-zinc-300 uppercase mb-1">
+                  Product Name *
+                </label>
+                <input
+                  id="inp-purchase-newprod-name"
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="e.g. Raw Material Batch A, Hardware Parts, Cement Bag"
+                  value={newProdName}
+                  onChange={(e) => setNewProdName(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                />
+              </div>
+
+              {/* Category & Unit */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase mb-1">
+                    Category
+                  </label>
+                  <input
+                    id="inp-purchase-newprod-category"
+                    type="text"
+                    placeholder="e.g. Raw Materials, Spares, Goods"
+                    value={newProdCategory}
+                    onChange={(e) => setNewProdCategory(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase mb-1">
+                    Unit of Measurement
+                  </label>
+                  <select
+                    id="sel-purchase-newprod-unit"
+                    value={newProdUnit}
+                    onChange={(e: any) => setNewProdUnit(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  >
+                    <option value="PCS">PCS (Pieces)</option>
+                    <option value="KG">KG (Kilograms)</option>
+                    <option value="LITER">LITER (Liters)</option>
+                    <option value="BOX">BOX (Boxes / Cartons)</option>
+                    <option value="MTR">MTR (Meters)</option>
+                    <option value="SET">SET (Sets / Kits)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Purchase Price & Selling Price */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase mb-1">
+                    Purchase Cost ({countryConfig.currencySymbol}) *
+                  </label>
+                  <input
+                    id="inp-purchase-newprod-purchase-price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    placeholder="0.00"
+                    value={newProdPurchasePrice}
+                    onChange={(e) => setNewProdPurchasePrice(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-bold font-mono text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase mb-1">
+                    Selling Price ({countryConfig.currencySymbol})
+                  </label>
+                  <input
+                    id="inp-purchase-newprod-selling-price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={newProdSellingPrice}
+                    onChange={(e) => setNewProdSellingPrice(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-bold font-mono text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Tax Rate & HSN */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase mb-1">
+                    {countryConfig.taxName} Rate (%)
+                  </label>
+                  <div className="space-y-1.5">
+                    <input
+                      id="inp-purchase-newprod-tax-rate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={newProdTaxRate}
+                      onChange={(e) => setNewProdTaxRate(parseFloat(e.target.value) || 0)}
+                      className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-bold font-mono text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                      {(countryConfig.taxRates || [0, 5, 12, 18, 28]).map((rate) => (
+                        <button
+                          key={rate}
+                          type="button"
+                          onClick={() => setNewProdTaxRate(rate)}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                            newProdTaxRate === rate
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200'
+                          }`}
+                        >
+                          {rate}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase mb-1">
+                    {countryConfig.hsnLabel}
+                  </label>
+                  <input
+                    id="inp-purchase-newprod-hsn"
+                    type="text"
+                    placeholder="e.g. 9988, 8471"
+                    value={newProdHsn}
+                    onChange={(e) => setNewProdHsn(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-mono text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  />
+                  <span className="block text-[9px] text-gray-400 mt-1">Default: 9999 if left blank</span>
+                </div>
+              </div>
+
+              {/* Initial Stock & SKU */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase mb-1">
+                    Existing Stock Before Purchase
+                  </label>
+                  <input
+                    id="inp-purchase-newprod-stock"
+                    type="number"
+                    min="0"
+                    value={newProdOpeningStock}
+                    onChange={(e) => setNewProdOpeningStock(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-bold font-mono text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  />
+                  <span className="block text-[9px] text-gray-400 mt-1">Stock bought in this bill will be added automatically</span>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase mb-1">
+                    Item Code / SKU
+                  </label>
+                  <input
+                    id="inp-purchase-newprod-sku"
+                    type="text"
+                    placeholder="Auto-generated if empty"
+                    value={newProdSku}
+                    onChange={(e) => setNewProdSku(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-mono text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Footer / Submit Button */}
+              <div className="pt-4 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAddProductModal(false)}
+                  className="px-4 py-2.5 text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200 font-bold text-xs hover:cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  id="btn-save-new-product-purchase-grid"
+                  disabled={isSavingProduct}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 hover:cursor-pointer transition-all disabled:opacity-50"
+                >
+                  {isSavingProduct ? (
+                    <span>Saving...</span>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Save & Stock-In to Bill</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
             </form>
           </div>
         </div>
