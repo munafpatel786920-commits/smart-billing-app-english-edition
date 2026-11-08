@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { statesOfIndia } from '../translations';
 import { 
@@ -25,10 +25,17 @@ import {
   Copy,
   CheckCircle2,
   ExternalLink,
-  PackagePlus
+  PackagePlus,
+  ScanBarcode,
+  Camera,
+  Volume2,
+  VolumeX,
+  Barcode,
+  Sparkles
 } from 'lucide-react';
 import { InvoiceItem, SalesInvoice, Customer, Product } from '../types';
 import jsPDF from 'jspdf';
+import { BarcodeScannerModal } from './BarcodeScannerModal';
 
 export const SalesBillingView: React.FC = () => {
   const { 
@@ -85,8 +92,20 @@ export const SalesBillingView: React.FC = () => {
   const [newProdTaxRate, setNewProdTaxRate] = useState<number>(countryConfig.defaultTaxRate ?? 18);
   const [newProdOpeningStock, setNewProdOpeningStock] = useState<string>('100');
   const [newProdSku, setNewProdSku] = useState('');
+  const [newProdBarcode, setNewProdBarcode] = useState('');
   const [prodFormError, setProdFormError] = useState('');
   const [isSavingProduct, setIsSavingProduct] = useState(false);
+
+  // Barcode Scanner & POS Hardware Gun States
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [scanFeedback, setScanFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+    scannedCode: string;
+  } | null>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const activeCustomer = useMemo(() => {
     return customers.find(c => c.customerId === selectedCustomerId);
@@ -199,8 +218,132 @@ export const SalesBillingView: React.FC = () => {
     };
   }, [items, isInterstate, countryConfig]);
 
+  // Play synthesized POS checkout beep
+  const playScanBeep = (isSuccess = true) => {
+    if (!soundEnabled) return;
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (isSuccess) {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1800, ctx.currentTime);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.12);
+      } else {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(280, ctx.currentTime);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.22);
+      }
+    } catch {
+      // Audio autoplay blocked or unsupported
+    }
+  };
+
+  // Process barcode scanned via camera or USB scanner gun
+  const handleProcessBarcode = (scannedText: string) => {
+    const raw = scannedText.trim();
+    if (!raw) return { found: false };
+
+    const clean = raw.toLowerCase();
+
+    // Look up product by barcode, SKU, ID, or clean name
+    const found = products.find(p => {
+      const pBarcode = (p.barcode || '').trim().toLowerCase();
+      const pSku = (p.sku || '').trim().toLowerCase();
+      const pId = (p.productId || '').trim().toLowerCase();
+      return pBarcode === clean || pSku === clean || pId === clean;
+    });
+
+    if (found) {
+      handleAddItem(found.productId);
+      playScanBeep(true);
+
+      const existing = items.find(it => it.productId === found.productId);
+      const nextQty = existing ? existing.qty + 1 : 1;
+
+      setScanFeedback({
+        type: 'success',
+        message: `✓ Added: ${found.name} (Qty: ${nextQty}) - ${formatCurrency(found.sellingPrice)}`,
+        scannedCode: raw
+      });
+
+      // Refocus scanner input for next item
+      setTimeout(() => {
+        barcodeInputRef.current?.focus();
+      }, 50);
+
+      setTimeout(() => {
+        setScanFeedback(prev => prev?.scannedCode === raw ? null : prev);
+      }, 4000);
+
+      return {
+        found: true,
+        productName: found.name,
+        price: found.sellingPrice
+      };
+    } else {
+      playScanBeep(false);
+      setScanFeedback({
+        type: 'error',
+        message: `No product found in inventory with barcode "${raw}".`,
+        scannedCode: raw
+      });
+
+      return {
+        found: false
+      };
+    }
+  };
+
+  // Hardware USB/Bluetooth Barcode Scanner Gun Keystroke Interceptor
+  useEffect(() => {
+    let keyBuffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInput = activeEl?.tagName === 'INPUT' || activeEl?.tagName === 'TEXTAREA' || activeEl?.tagName === 'SELECT';
+      
+      // If typing in another input (customer, notes, etc.), do not intercept unless it is the dedicated barcode scanner input
+      if (isInput && activeEl?.id !== 'inp-barcode-scanner') {
+        return;
+      }
+
+      const currentTime = Date.now();
+      // Hardware scanners type keys faster than 60ms; human typing is slower
+      if (currentTime - lastKeyTime > 160) {
+        keyBuffer = '';
+      }
+      lastKeyTime = currentTime;
+
+      if (e.key === 'Enter') {
+        if (keyBuffer.length >= 3) {
+          e.preventDefault();
+          handleProcessBarcode(keyBuffer);
+          keyBuffer = '';
+          setBarcodeInput('');
+        }
+      } else if (e.key.length === 1) {
+        keyBuffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [products, items]);
+
   // Product creation from Sales Grid Table
-  const handleOpenNewProductModal = () => {
+  const handleOpenNewProductModal = (prefilledBarcode?: string) => {
     setNewProdName('');
     setNewProdCategory('General');
     setNewProdHsn('');
@@ -209,7 +352,8 @@ export const SalesBillingView: React.FC = () => {
     setNewProdPurchasePrice('');
     setNewProdTaxRate(countryConfig.defaultTaxRate ?? 18);
     setNewProdOpeningStock('100');
-    setNewProdSku(`SKU-${Math.floor(1000 + Math.random() * 9000)}`);
+    setNewProdSku(prefilledBarcode ? `SKU-${prefilledBarcode.slice(-4)}` : `SKU-${Math.floor(1000 + Math.random() * 9000)}`);
+    setNewProdBarcode(prefilledBarcode || '');
     setProdFormError('');
     setShowAddProductModal(true);
   };
@@ -238,6 +382,7 @@ export const SalesBillingView: React.FC = () => {
         name: newProdName.trim(),
         category: newProdCategory.trim() || 'General',
         sku: generatedSku,
+        barcode: newProdBarcode.trim() || undefined,
         hsnCode: hsnVal,
         unit: newProdUnit,
         purchasePrice: pPrice,
@@ -1232,7 +1377,7 @@ export const SalesBillingView: React.FC = () => {
 
         {/* Grid: Adding Row Products */}
       <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-gray-100 dark:border-zinc-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-zinc-800">
           <div>
             <h4 id="item-grid-title" className="text-sm font-bold text-gray-800 dark:text-zinc-200 uppercase tracking-wide flex items-center gap-2">
               <span>Invoice Sales Grid Table</span>
@@ -1241,22 +1386,157 @@ export const SalesBillingView: React.FC = () => {
               </span>
             </h4>
             <p className="text-[11px] text-gray-500 dark:text-zinc-400">
-              Pick existing items from inventory or create a new product directly from this table.
+              Scan barcode via camera or USB scanner gun, pick from inventory, or create a new product directly.
             </p>
           </div>
-          <button
-            type="button"
-            id="btn-grid-create-new-product"
-            onClick={handleOpenNewProductModal}
-            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all hover:cursor-pointer shrink-0"
-            title="Create a new product right from this invoice grid table"
-          >
-            <PackagePlus className="w-4 h-4" />
-            <span>+ Create New Product</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              id="btn-open-camera-scanner"
+              onClick={() => setIsCameraScannerOpen(true)}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all hover:cursor-pointer shrink-0"
+              title="Open Camera Barcode / QR Scanner"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>Camera Scanner</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={`p-2 rounded-xl border text-xs transition-colors hover:cursor-pointer ${
+                soundEnabled 
+                  ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400' 
+                  : 'bg-gray-100 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-400'
+              }`}
+              title={soundEnabled ? 'Scanner Beep Sound: ON (Click to Mute)' : 'Scanner Beep Sound: OFF (Click to Enable)'}
+            >
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
+              id="btn-grid-create-new-product"
+              onClick={() => handleOpenNewProductModal()}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all hover:cursor-pointer shrink-0"
+              title="Create a new product right from this invoice grid table"
+            >
+              <PackagePlus className="w-4 h-4" />
+              <span>+ Create New Product</span>
+            </button>
+          </div>
         </div>
 
-        {/* Product selector helper bar */}
+        {/* Dedicated POS Barcode Scanner Toolbar */}
+        <div className="p-3.5 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-emerald-50/40 dark:from-zinc-800/80 dark:via-zinc-800/50 dark:to-zinc-800/80 rounded-xl border border-blue-100 dark:border-zinc-700 space-y-2.5">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-600 dark:text-blue-400">
+                <ScanBarcode className="w-4 h-4" />
+              </div>
+              <input
+                ref={barcodeInputRef}
+                id="inp-barcode-scanner"
+                type="text"
+                value={barcodeInput}
+                onChange={(e) => setBarcodeInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (barcodeInput.trim()) {
+                      handleProcessBarcode(barcodeInput);
+                      setBarcodeInput('');
+                    }
+                  }
+                }}
+                placeholder="Scan with handheld gun or type barcode / SKU / EAN-13 & press Enter..."
+                className="w-full pl-9 pr-24 py-2 bg-white dark:bg-zinc-900 border border-blue-200 dark:border-zinc-700 rounded-xl text-xs font-mono text-gray-900 dark:text-white placeholder:font-sans placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-hidden shadow-xs"
+              />
+              <div className="absolute inset-y-0 right-1 flex items-center pr-1 gap-1">
+                <button
+                  type="button"
+                  id="btn-scan-submit"
+                  onClick={() => {
+                    if (barcodeInput.trim()) {
+                      handleProcessBarcode(barcodeInput);
+                      setBarcodeInput('');
+                    }
+                  }}
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg transition-colors hover:cursor-pointer flex items-center gap-1"
+                >
+                  <span>Scan</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                id="btn-scan-camera-trigger"
+                onClick={() => setIsCameraScannerOpen(true)}
+                className="px-3 py-2 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 hover:cursor-pointer shadow-xs"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Live Camera</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Real-time Scan Feedback Banner */}
+          {scanFeedback && (
+            <div
+              id="barcode-feedback-banner"
+              className={`p-2.5 rounded-lg text-xs font-medium flex items-center justify-between gap-2 transition-all ${
+                scanFeedback.type === 'success'
+                  ? 'bg-emerald-100/90 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800'
+                  : 'bg-amber-100/90 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {scanFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                ) : (
+                  <Barcode className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                )}
+                <span>{scanFeedback.message}</span>
+              </div>
+              {scanFeedback.type === 'error' && scanFeedback.scannedCode && (
+                <button
+                  type="button"
+                  id="btn-create-with-scanned-barcode"
+                  onClick={() => handleOpenNewProductModal(scanFeedback.scannedCode)}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[11px] shrink-0 transition-colors hover:cursor-pointer flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ Create Product with this Barcode</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Quick Barcode Test Pills */}
+          <div className="flex items-center gap-1.5 flex-wrap pt-0.5 text-[11px]">
+            <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 flex items-center gap-1 uppercase tracking-wider">
+              <Barcode className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+              Quick Test:
+            </span>
+            {products
+              .filter(p => p.barcode)
+              .slice(0, 4)
+              .map(p => (
+                <button
+                  key={p.productId}
+                  type="button"
+                  onClick={() => handleProcessBarcode(p.barcode || '')}
+                  className="px-2 py-0.5 bg-white dark:bg-zinc-900 hover:bg-blue-50 dark:hover:bg-blue-950/50 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-zinc-700 rounded-md font-mono text-[10px] flex items-center gap-1 hover:border-blue-400 transition-colors hover:cursor-pointer shadow-2xs"
+                  title={`Click to simulate scanning ${p.name}`}
+                >
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">{p.barcode}</span>
+                  <span className="text-gray-400 font-sans">({p.name.slice(0, 14)})</span>
+                </button>
+              ))}
+          </div>
+        </div>
+
+        {/* Product selector dropdown helper bar */}
         <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
           <div className="flex-1">
             <select
@@ -1275,20 +1555,20 @@ export const SalesBillingView: React.FC = () => {
               }}
               className="w-full text-xs p-2.5 bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-zinc-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">➕ Choose Product to Add Line Row...</option>
+              <option value="">➕ Or Choose Product from Dropdown...</option>
               <option value="__CREATE_NEW__" className="font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40">
                 ✨ ➕ [Create New Product & Add to Invoice Grid]
               </option>
               {products.map((p, idx) => (
                 <option key={idx} value={p.productId} disabled={p.currentStock <= 0}>
-                  {p.name} ({countryConfig.hsnLabel}: {p.hsnCode}) - Price: {formatCurrency(p.sellingPrice)} / {p.currentStock} {p.unit || 'Units'} Stock
+                  {p.name} {p.barcode ? `[Barcode: ${p.barcode}]` : ''} ({countryConfig.hsnLabel}: {p.hsnCode}) - Price: {formatCurrency(p.sellingPrice)} / {p.currentStock} {p.unit || 'Units'} Stock
                 </option>
               ))}
             </select>
           </div>
           <button
             type="button"
-            onClick={handleOpenNewProductModal}
+            onClick={() => handleOpenNewProductModal()}
             className="px-3.5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-800 dark:text-zinc-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap hover:cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -1649,6 +1929,40 @@ export const SalesBillingView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Barcode / EAN-13 / UPC */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase">
+                    Barcode / EAN-13 / UPC
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const randomEan = '890' + Math.floor(1000000000 + Math.random() * 9000000000);
+                      setNewProdBarcode(randomEan);
+                    }}
+                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1 hover:cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Generate EAN-13
+                  </button>
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                    <ScanBarcode className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="inp-newprod-barcode"
+                    type="text"
+                    placeholder="Scan or enter barcode (e.g. 8901234567890)"
+                    value={newProdBarcode}
+                    onChange={(e) => setNewProdBarcode(e.target.value)}
+                    className="w-full pl-9 pr-3 p-2.5 bg-gray-50 dark:bg-zinc-800/60 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-mono text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+                <span className="block text-[9px] text-gray-400 mt-1">Allows instant billing by scanning with camera or USB barcode scanner gun</span>
+              </div>
+
               {/* Modal Footer / Submit Button */}
               <div className="pt-4 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-end gap-2.5">
                 <button
@@ -1917,6 +2231,18 @@ export const SalesBillingView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* CAMERA BARCODE / QR SCANNER MODAL */}
+      {/* ------------------------------------------------------------- */}
+      <BarcodeScannerModal
+        isOpen={isCameraScannerOpen}
+        onClose={() => setIsCameraScannerOpen(false)}
+        onScan={handleProcessBarcode}
+        soundEnabled={soundEnabled}
+        onToggleSound={() => setSoundEnabled(!soundEnabled)}
+        currencySymbol={countryConfig.currencySymbol}
+      />
 
     </div>
   );

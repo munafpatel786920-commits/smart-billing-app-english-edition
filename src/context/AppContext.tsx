@@ -348,7 +348,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveCompany(parsed);
     }
 
-    setProducts(JSON.parse(localStorage.getItem('demo_products') || '[]'));
+    const rawProds: Product[] = JSON.parse(localStorage.getItem('demo_products') || '[]');
+    const sampleBarcodes = ['8901030384721', '8901233014523', '8906001050012', '8902080001015'];
+    const enrichedProds = rawProds.map((p, idx) => {
+      if (!p.barcode) {
+        return { ...p, barcode: sampleBarcodes[idx % sampleBarcodes.length] || `890${1000000000 + idx}` };
+      }
+      return p;
+    });
+    setProducts(enrichedProds);
     setCustomers(JSON.parse(localStorage.getItem('demo_customers') || '[]'));
     setSuppliers(JSON.parse(localStorage.getItem('demo_suppliers') || '[]'));
     setAllInvoices(JSON.parse(localStorage.getItem('demo_invoices') || '[]'));
@@ -448,7 +456,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           name: "Steel Pipe 2'",
           category: "Construction",
           sku: "ST-02",
-          barcode: "",
+          barcode: "8901030384721",
           hsnCode: "7306",
           unit: "PCS",
           purchasePrice: 380,
@@ -465,7 +473,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           name: "PVC Joint 4'",
           category: "Plumbing",
           sku: "PVC-4",
-          barcode: "",
+          barcode: "8901233014523",
           hsnCode: "3917",
           unit: "PCS",
           purchasePrice: 90,
@@ -482,7 +490,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           name: "Cement Bag 50kg",
           category: "Building Material",
           sku: "CEMENT-50",
-          barcode: "",
+          barcode: "8906001050012",
           hsnCode: "2523",
           unit: "PCS",
           purchasePrice: 310,
