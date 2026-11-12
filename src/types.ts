@@ -304,3 +304,32 @@ export interface MasterResetOptions {
   scope: MasterResetScope;
   adminEmail: string;
 }
+
+export type LicenseDuration = '1_MONTH' | '3_MONTHS' | '6_MONTHS' | '1_YEAR' | 'LIFETIME';
+
+export type LicenseStatus = 'ACTIVE' | 'EXPIRED' | 'BLOCKED' | 'REVOKED';
+
+export interface ActivationKey {
+  keyId: string;
+  keyHash: string;
+  keyMask: string;
+  rawKey?: string;
+  duration: LicenseDuration;
+  status: 'UNUSED' | 'USED' | 'REVOKED';
+  createdAt: string;
+  usedAt?: string;
+  usedByTenantId?: string;
+  usedByUserId?: string;
+}
+
+export interface TenantLicense {
+  tenantId: string;
+  businessName: string;
+  userId: string;
+  duration: LicenseDuration;
+  status: LicenseStatus;
+  activatedAt: string;
+  expiresAt?: string | null;
+  activationKeyHash?: string;
+}
+

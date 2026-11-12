@@ -782,9 +782,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [loadDemoSession]);
 
   // Auth Functions
-  const login = async (email: string, password: string) => {
+  const login = async (identifier: string, password: string) => {
     setAuthLoading(true);
-    const targetEmail = email.trim().toLowerCase();
+    const cleanId = identifier.trim().toLowerCase();
+    
+    // Resolve identifier to email if it doesn't have '@'
+    let targetEmail = cleanId;
+    if (!cleanId.includes('@')) {
+      try {
+        const uQuery = query(collection(db, 'users'), where('userId', '==', cleanId));
+        const uSnap = await getDocs(uQuery);
+        if (!uSnap.empty) {
+          const uData = uSnap.docs[0].data() as UserProfile;
+          if (uData.email) {
+            targetEmail = uData.email.toLowerCase();
+          }
+        } else {
+          targetEmail = `${cleanId}@smartbilling.app`;
+        }
+      } catch (e) {
+        targetEmail = `${cleanId}@smartbilling.app`;
+      }
+    }
+
+    if (targetEmail === 'demo@gmail') {
+      targetEmail = 'demo@gmail.com';
+    } else if (targetEmail.endsWith('@gmail')) {
+      targetEmail = targetEmail + '.com';
+    }
     
     // 1. Try Firebase Authentication
     try {
@@ -827,7 +852,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         setUserProfile(superAdminProfile);
         
-        // Save/Sync to Firestore if reachable
         try {
           await setDoc(doc(db, 'users', superAdminUid), superAdminProfile, { merge: true });
         } catch (e) {
@@ -839,10 +863,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
 
-      // 3. Fallback for users created via Super Admin Panel when Firebase Email/Password is not toggled on
+      // 3. Fallback for users created via Super Admin Panel or Activation when Firebase Email/Password is not toggled on
       try {
-        const usersQuery = query(collection(db, 'users'), where('email', '==', targetEmail));
-        const userSnap = await getDocs(usersQuery);
+        let userSnap = await getDocs(query(collection(db, 'users'), where('email', '==', targetEmail)));
+        if (userSnap.empty && !cleanId.includes('@')) {
+          userSnap = await getDocs(query(collection(db, 'users'), where('userId', '==', cleanId)));
+        }
         
         if (!userSnap.empty) {
           const matchedDoc = userSnap.docs[0];
@@ -853,18 +879,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             throw new Error("Your account has been suspended by the administrator. Please contact support.");
           }
 
-          console.log("Logging in matched user from database:", targetEmail);
+          console.log("Logging in matched user from database:", matchedProfile.email);
           const fallbackUser = {
             uid: matchedDoc.id,
-            email: targetEmail,
-            displayName: matchedProfile.name || targetEmail.split('@')[0],
+            email: matchedProfile.email,
+            displayName: matchedProfile.name || cleanId,
             emailVerified: true
           } as any;
 
           sessionStorage.setItem('app_direct_session', JSON.stringify({
             uid: matchedDoc.id,
-            email: targetEmail,
-            name: matchedProfile.name || targetEmail.split('@')[0],
+            email: matchedProfile.email,
+            name: matchedProfile.name || cleanId,
             isSuperAdmin: false,
             companyId: matchedProfile.activeCompanyId
           }));

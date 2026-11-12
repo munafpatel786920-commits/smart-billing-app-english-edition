@@ -10,7 +10,11 @@ import { KeyRound, Mail, User, Building2, ChevronRight, Eye, EyeOff, ShieldCheck
 import { motion } from 'motion/react';
 import logo from '../assets/logo.png';
 
-export const AuthView: React.FC = () => {
+interface AuthViewProps {
+  onOpenActivation?: () => void;
+}
+
+export const AuthView: React.FC<AuthViewProps> = ({ onOpenActivation }) => {
   const { login, register, loginWithGoogle, loginWithDemo, authLoading, authError } = useApp();
   
   const [email, setEmail] = useState('');
@@ -227,17 +231,17 @@ export const AuthView: React.FC = () => {
             )}
 
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
+              <label className="block text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5 ml-1">Email Address or User ID</label>
               <div className="relative group">
                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400 dark:text-zinc-500 group-focus-within:text-blue-500 transition-colors">
                   <Mail className="w-4 h-4" />
                 </span>
                 <input
-                  type="email"
+                  type="text"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@yourbusiness.com"
+                  placeholder="admin@business.com or gupta_store"
                   className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-gray-900 dark:text-white"
                 />
               </div>
@@ -272,10 +276,23 @@ export const AuthView: React.FC = () => {
               disabled={loadingState || authLoading}
               className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] disabled:bg-blue-400 disabled:scale-100 text-white font-bold text-sm tracking-wide rounded-xl flex items-center justify-center gap-2 transition-all mt-6 shadow-xl shadow-blue-600/20 cursor-pointer"
             >
-              {loadingState ? 'Verifying...' : isRegister ? 'Set Up Business' : 'Access Dashboard'}
+              {loadingState ? 'Verifying...' : 'Access Dashboard'}
               {!loadingState && <ChevronRight className="w-4 h-4" />}
             </button>
           </form>
+
+          {onOpenActivation && (
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-zinc-800 text-center">
+              <button
+                type="button"
+                onClick={onOpenActivation}
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Have an Activation Key? Activate Shop</span>
+              </button>
+            </div>
+          )}
 
           <div className="mt-10 text-center">
             <p className="text-[10px] font-black text-gray-400 dark:text-zinc-600 uppercase tracking-widest">

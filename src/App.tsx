@@ -15,6 +15,7 @@ import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
 import { SuperAdminView } from './components/SuperAdminView';
 import { ExpensesView } from './components/ExpensesView';
+import { CustomerActivationView } from './components/CustomerActivationView';
 
 import { 
   Menu, 
@@ -39,7 +40,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { COUNTRIES, CountryCode, getCountryConfig } from './utils/countryConfig';
 
-type ViewType = 'DASHBOARD' | 'SALES_BILLING' | 'PURCHASE_BILLING' | 'INVENTORY' | 'PARTIES' | 'REPORTS' | 'SETTINGS' | 'EXPENSES' | 'SUPER_ADMIN';
+type ViewType = 'DASHBOARD' | 'SALES_BILLING' | 'PURCHASE_BILLING' | 'INVENTORY' | 'PARTIES' | 'REPORTS' | 'SETTINGS' | 'EXPENSES' | 'SUPER_ADMIN' | 'ACTIVATION';
 
 export default function App() {
   const { 
@@ -72,9 +73,17 @@ export default function App() {
     }
   }, [isSuperAdmin]);
 
-  // If user is not authenticated, render AuthView
+  // If user is not authenticated, render AuthView or CustomerActivationView
   if (!currentUser) {
-    return <AuthView />;
+    if (currentView === 'ACTIVATION') {
+      return (
+        <CustomerActivationView
+          onBackToLogin={() => setCurrentView('DASHBOARD')}
+          onActivationSuccess={() => setCurrentView('DASHBOARD')}
+        />
+      );
+    }
+    return <AuthView onOpenActivation={() => setCurrentView('ACTIVATION')} />;
   }
 
   let navItems = [

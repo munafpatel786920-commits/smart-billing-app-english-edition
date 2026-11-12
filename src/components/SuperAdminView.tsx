@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
-import { collection, getDocs, doc, writeBatch, Timestamp, updateDoc } from "firebase/firestore";
+import { collection, getDocs, doc, writeBatch, Timestamp, updateDoc, setDoc } from "firebase/firestore";
 import { db, firebaseConfig, handleFirestoreError, OperationType } from "../firebase";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signOut } from "firebase/auth";
-import { UserProfile, Company, UserRole, CompanyMember } from "../types";
+import { UserProfile, Company, UserRole, CompanyMember, ActivationKey, LicenseDuration } from "../types";
 import {
   Users2,
   Building2,
@@ -50,6 +50,62 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onOpenApp }) => 
   const [userSearch, setUserSearch] = useState("");
   const [companySearch, setCompanySearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUSPENDED'>('ALL');
+
+  // Activation Keys states
+  const [activeTab, setActiveTab] = useState<'USERS_COMPANIES' | 'ACTIVATION_KEYS'>('USERS_COMPANIES');
+  const [activationKeys, setActivationKeys] = useState<ActivationKey[]>([]);
+  const [selectedDuration, setSelectedDuration] = useState<LicenseDuration>('1_YEAR');
+  const [generatedKeyInfo, setGeneratedKeyInfo] = useState<{ rawKey: string; duration: string } | null>(null);
+  const [keySearch, setKeySearch] = useState('');
+  const [copiedKey, setCopiedKey] = useState(false);
+
+  const hashKey = async (key: string): Promise<string> => {
+    const msgUint8 = new TextEncoder().encode(key.trim());
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const handleGenerateKey = async () => {
+    const p1 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const p2 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const p3 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const p4 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const rawKey = `SBILL-${p1}-${p2}-${p3}-${p4}`;
+    const keyHash = await hashKey(rawKey);
+    const keyMask = `SBILL-${p1}-****-****-${p4}`;
+
+    const newKeyRecord: ActivationKey = {
+      keyId: 'key_' + Date.now(),
+      keyHash,
+      keyMask,
+      duration: selectedDuration,
+      status: 'UNUSED',
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, 'activationKeys', keyHash), newKeyRecord);
+    } catch (e) {
+      console.warn("Firestore activation key write warning:", e);
+    }
+
+    const updated = [newKeyRecord, ...activationKeys];
+    setActivationKeys(updated);
+    localStorage.setItem('sa_activation_keys', JSON.stringify(updated));
+    setGeneratedKeyInfo({ rawKey, duration: selectedDuration });
+  };
+
+  const handleRevokeKey = async (keyHash: string) => {
+    try {
+      await updateDoc(doc(db, 'activationKeys', keyHash), { status: 'REVOKED' });
+    } catch (e) {
+      console.warn("Firestore revoke notice:", e);
+    }
+    const updated = activationKeys.map(k => k.keyHash === keyHash ? { ...k, status: 'REVOKED' as const } : k);
+    setActivationKeys(updated);
+    localStorage.setItem('sa_activation_keys', JSON.stringify(updated));
+  };
   
   // Expanded company for members view
   const [expandedCompanyId, setExpandedCompanyId] = useState<string | null>(null);
@@ -116,12 +172,22 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onOpenApp }) => 
     setError(null);
     
     try {
-      const [usersSnap, companiesSnap] = await Promise.all([
+      const [usersSnap, companiesSnap, keysSnap] = await Promise.all([
         getDocs(collection(db, "users")),
         getDocs(collection(db, "companies")),
+        getDocs(collection(db, "activationKeys")),
       ]);
 
       const loadedUsers = usersSnap.docs.map((d) => d.data() as UserProfile);
+      const loadedKeys = keysSnap.docs.map((d) => d.data() as ActivationKey);
+
+      if (loadedKeys.length > 0) {
+        setActivationKeys(loadedKeys);
+        localStorage.setItem('sa_activation_keys', JSON.stringify(loadedKeys));
+      } else {
+        const cachedKeys = localStorage.getItem('sa_activation_keys');
+        if (cachedKeys) setActivationKeys(JSON.parse(cachedKeys));
+      }
       const loadedCompanies = await Promise.all(
         companiesSnap.docs.map(async (d) => {
           const comp = d.data() as Company;
@@ -595,6 +661,173 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onOpenApp }) => 
           <p className="text-2xl font-black">{stats.totalCompanies}</p>
         </div>
       </div>
+
+      {/* Super Admin Tabs */}
+      <div className="flex gap-2 border-b border-gray-200 dark:border-zinc-800 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('USERS_COMPANIES')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'USERS_COMPANIES'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200'
+          }`}
+        >
+          👥 Users & Organizations
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('ACTIVATION_KEYS')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'ACTIVATION_KEYS'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200'
+          }`}
+        >
+          🔑 Activation Keys & Licenses ({activationKeys.length})
+        </button>
+      </div>
+
+      {activeTab === 'ACTIVATION_KEYS' ? (
+        <div className="space-y-6">
+          {/* Key Generator Card */}
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm space-y-4">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-blue-600" />
+              Generate New Activation Key
+            </h3>
+            <p className="text-xs text-gray-500">
+              Create secure, single-use activation keys with custom license validity durations for your customers.
+            </p>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+              <div className="flex-1">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+                  License Duration
+                </label>
+                <select
+                  value={selectedDuration}
+                  onChange={(e) => setSelectedDuration(e.target.value as LicenseDuration)}
+                  className="w-full p-2.5 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white focus:outline-none"
+                >
+                  <option value="1_MONTH">1 Month (30 Days)</option>
+                  <option value="3_MONTHS">3 Months (90 Days)</option>
+                  <option value="6_MONTHS">6 Months (180 Days)</option>
+                  <option value="1_YEAR">1 Year (365 Days)</option>
+                  <option value="LIFETIME">Lifetime (Never Expires)</option>
+                </select>
+              </div>
+              <div className="sm:self-end">
+                <button
+                  type="button"
+                  onClick={handleGenerateKey}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Generate Key Now</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Generated Key Modal / Banner */}
+          {generatedKeyInfo && (
+            <div className="p-5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <span className="text-[10px] bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-black uppercase px-2 py-0.5 rounded">
+                  Duration: {generatedKeyInfo.duration}
+                </span>
+                <p className="text-sm font-black text-emerald-950 dark:text-emerald-100 font-mono tracking-wider mt-1">
+                  {generatedKeyInfo.rawKey}
+                </p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                  Copy and share this activation key with your customer. It can be used only once.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedKeyInfo.rawKey);
+                    setCopiedKey(true);
+                    setTimeout(() => setCopiedKey(false), 2500);
+                  }}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  {copiedKey ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  <span>{copiedKey ? 'Copied!' : 'Copy Key'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGeneratedKeyInfo(null)}
+                  className="px-3 py-2.5 bg-emerald-200/60 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 font-bold text-xs rounded-xl hover:cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Activation Keys List Table */}
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+            <div className="p-4 border-b border-gray-100 dark:border-zinc-800 flex items-center justify-between">
+              <h4 className="font-bold text-sm text-gray-900 dark:text-white">All Generated Activation Keys</h4>
+              <span className="text-xs bg-blue-50 dark:bg-blue-950/40 text-blue-600 font-bold px-2.5 py-1 rounded-lg">
+                {activationKeys.length} Keys Total
+              </span>
+            </div>
+            
+            <div className="overflow-x-auto">
+              {activationKeys.length === 0 ? (
+                <p className="p-8 text-center text-xs text-gray-400 italic">No activation keys generated yet. Use the generator above.</p>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-zinc-800/50 text-gray-400 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200 dark:border-zinc-800">
+                      <th className="p-3.5">Key Mask</th>
+                      <th className="p-3.5">Duration</th>
+                      <th className="p-3.5">Status</th>
+                      <th className="p-3.5">Created At</th>
+                      <th className="p-3.5">Used By Tenant</th>
+                      <th className="p-3.5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                    {activationKeys.map((k) => (
+                      <tr key={k.keyId} className="hover:bg-gray-50/50 dark:hover:bg-zinc-800/30">
+                        <td className="p-3.5 font-mono font-bold text-gray-800 dark:text-zinc-200">{k.keyMask}</td>
+                        <td className="p-3.5 font-bold text-blue-600 dark:text-blue-400">{k.duration}</td>
+                        <td className="p-3.5">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            k.status === 'UNUSED' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300' :
+                            k.status === 'USED' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300' :
+                            'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300'
+                          }`}>
+                            {k.status}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-gray-500 font-mono">{new Date(k.createdAt).toLocaleDateString()}</td>
+                        <td className="p-3.5 font-mono text-gray-500">{k.usedByTenantId || '—'}</td>
+                        <td className="p-3.5 text-right">
+                          {k.status === 'UNUSED' && (
+                            <button
+                              type="button"
+                              onClick={() => handleRevokeKey(k.keyHash)}
+                              className="px-2.5 py-1 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 text-red-600 text-[10px] font-bold rounded-lg transition-colors cursor-pointer"
+                            >
+                              Revoke
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -1080,6 +1313,8 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onOpenApp }) => 
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };
